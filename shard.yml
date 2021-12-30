@@ -1,0 +1,9 @@
+name: crystal-web
+version: 0.1.0
+
+authors:
+  - Guilherme Bernal <guilherme@cubos.io>
+
+crystal: 1.2.2
+
+license: MIT

@@ -47,7 +47,7 @@ There are several steps required to get the demo working for you. Here is the gu
 4. Link your final WebAssembly binary:
 
     ```sh
-    wasm-ld demo.wasm -o demo-final.wasm libc.a libclang_rt.builtins-wasm32.a libpcre.a --import-undefined --no-entry --export __original_main
+    wasm-ld demo.wasm -o demo-final.wasm libc.a libclang_rt.builtins-wasm32.a libpcre.a --import-undefined --no-entry --export __crystal_main
     ```
 
     If you don't have `wasm-ld`, install the "lld" or "llvm-lld" packages. https://lld.llvm.org/WebAssembly.html.
@@ -80,7 +80,7 @@ The previous steps create an unoptimized debug build. To optimize it (for speed/
 2. Link removing debug symbols and compressing sections:
 
     ```sh
-    wasm-ld demo.wasm -o demo-final.wasm libc.a libclang_rt.builtins-wasm32.a libpcre.a --import-undefined --no-entry --export __original_main --strip-all --compress-relocations
+    wasm-ld demo.wasm -o demo-final.wasm libc.a libclang_rt.builtins-wasm32.a libpcre.a --import-undefined --no-entry --export __crystal_main --strip-all --compress-relocations
     ```
 
 3. Optimize with `wasm-opt`. Install it from Binaryen (https://github.com/WebAssembly/binaryen):

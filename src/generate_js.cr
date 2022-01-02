@@ -26,12 +26,6 @@ END
   js << <<-END
     },
     wasi_snapshot_preview1: {
-      args_get() { return 0; },
-      args_sizes_get(argc, argvLength) {
-        mem.setUint32(argc, 0, true);
-        mem.setUint32(argvLength, 0, true);
-        return 0;
-      },
       fd_close() { throw new Error("fd_close"); },
       fd_fdstat_get(fd, buf) {
         if (fd > 2) return 8;
@@ -68,7 +62,7 @@ END
   const wasm = await WebAssembly.instantiate(await (await fetch(wasmHref)).arrayBuffer(), imports);
   instance = wasm.instance;
   mem = new DataView(instance.exports.memory.buffer)
-  instance.exports.__original_main();
+  instance.exports.__crystal_main(0, 0);
 }
 
 END

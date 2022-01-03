@@ -3,13 +3,20 @@ require "json"
 File.open("web.js", "w") do |js|
   js << <<-END
 async function runCrystalApp(wasmHref) {
-  const heap = [null, window];
+  const heap = [null];
+  const free = [];
   let instance;
   let mem;
 
-  function wrap(element) {
-    heap.push(element);
-    return heap.length - 1;
+  function make_ref(element) {
+    const index = free.length ? free.pop() : heap.length;
+    heap[index] = element;
+    return index;
+  }
+
+  function drop_ref(index) {
+    heap[index] = undefined;
+    free.push(index);
   }
 
   function read_string(pos, len) {
@@ -21,7 +28,7 @@ async function runCrystalApp(wasmHref) {
 
 END
   JSON.parse(ARGV[0]).as_a.each do |func|
-    js << "      #{func[0]}: #{func[1]},\n"
+    js << "      #{func},\n"
   end
   js << <<-END
     },

@@ -18,6 +18,82 @@ This is an early proof of concept. It demonstrates that it is possible to develo
 
 ## Usage
 
+For basic usage you can `require "web/dom"` and then use DOM related classes and methods. The global `window` object will be accessible at `Web.window`.
+
+```crystal
+require "web/dom"
+
+Web.window.console.log("Hello from the Web!")
+```
+
+You can define special methods that run JavaScript code from Crystal. They can take parameters but their body must be a single string literal using interpolation to receive arguments:
+
+```crystal
+require "web/javascript"
+
+module Test
+  # You need to include this module. It won't add any new methods, all it will do
+  # is expanding JavaScript methods you define.
+  include JavaScript::ExpandMethods
+
+  # Mark JavaScript methods with this annotation. They must be fully typed and
+  # be aware that not all types are supported yet.
+  @[JavaScript::Method]
+  def self.add(first : Int32, second : Int32) : Int32
+    # This is now a raw string interpolation. The notation here is used to pass
+    # valid values to JavaScript land.
+    <<-js
+      return #{first} + #{second}; // This is JavaScript!
+    js
+  end
+end
+
+five = Test.add(2, 3) # Returns 5.
+```
+
+More complex examples can be created using `JavaScript::Value`, an abstract base class capable of holding references to JavaScript values.
+
+```crystal
+require "web/javascript"
+
+class MyObj < JavaScript::Value
+  @[JavaScript::Method]
+  def self.new(data : String) : MyObj
+    <<-js
+      const pieces = #{data}.split(', ')
+      return {
+        pieces,
+        length: pieces.length
+      };
+    js
+  end
+
+  @[JavaScript::Method]
+  def size : Int32
+    <<-js
+      return #{self}.length;
+    js
+  end
+
+  @[JavaScript::Method]
+  def add_piece(piece : String)
+    <<-js
+      #{self}.pieces.push(#{piece.strip.as(String)}); // You can use complex Crystal expressions,
+      #{self}.length += 1;                            // as long as you add `.as(type)` to it.
+    js
+  end
+end
+
+obj = MyObj.new("a, b, c")
+p obj.size # => 3
+obj.add_piece("d")
+p obj.size # => 4
+```
+
+Only the methods that are actually called will be generated in the output `web.js` file, thus it is fine to define usused methods.
+
+## Building your project
+
 There are several steps required to get the demo working for you. Here is the guide:
 
 1. Build the Crystal compiler from source, from PR [#10870](https://github.com/crystal-lang/crystal/pull/10870).
@@ -67,7 +143,7 @@ There are several steps required to get the demo working for you. Here is the gu
 
 7. Open your browser at http://localhost:8000 and enjoy.
 
-## Creating an optimized build
+### Creating an optimized build
 
 The previous steps create an unoptimized debug build. To optimize it (for speed/size) you need:
 
@@ -91,6 +167,9 @@ The previous steps create an unoptimized debug build. To optimize it (for speed/
 
 4. Use `demo-opt.wasm` instead of `demo-final.wasm`. It will work the same, but in case of errors, no useful stacktrace will be printed.
 
-## Contributors
+## How to contribute?
 
-- [Guilherme Bernal](https://github.com/lbguilherme) - creator and maintainer
+- Help defining more standard DOM interfaces at `src/dom.cr` (good start)
+- Build cool demos and examples with this library (awesome)
+- Support more types for the bridge at `src/javascript.cr` (complex)
+- Identify, report and/or fix bugs

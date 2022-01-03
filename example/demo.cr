@@ -1,4 +1,4 @@
-require "../src/web"
+require "../src/dom"
 
 window = Web.window
 console = window.console

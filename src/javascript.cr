@@ -110,7 +110,7 @@ module JavaScript
                     js_args << arg
                     fun_args_decl << "#{arg.id} : Int32".id
                     js_body += "heap[#{arg.id}]"
-                    cr_args << "@extern_ref.index".id
+                    cr_args << "#{piece.id}.@extern_ref.index".id
                   elsif [Int8, Int16, Int32, UInt8, UInt16, UInt32].includes? type
                     arg = "arg#{js_args.size+1}"
                     js_args << arg

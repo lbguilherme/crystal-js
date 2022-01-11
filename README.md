@@ -2,7 +2,7 @@
 
 This is an early proof of concept. It demonstrates that it is possible to develop Web front-end applications using Crystal. This library exposes the DOM and other browser JavaScript API's.
 
-![demo](example/demo.png)
+![demo](demo.png)
 
 ## Installation
 
@@ -15,6 +15,10 @@ This is an early proof of concept. It demonstrates that it is possible to develo
    ```
 
 2. Run `shards install`
+
+3. Build your project with `lib/web/scripts/build.sh src/main.cr`
+
+See [crystal-web-demo](https://github.com/lbguilherme/crystal-web-demo) for an example project.
 
 ## Usage
 
@@ -94,22 +98,19 @@ Only the methods that are actually called will be generated in the output `web.j
 
 ## Building your project
 
-There are several steps required to get the demo working for you. Here is the guide:
+You can use `shards install` and then build with `lib/web/scripts/build.sh src/main.cr`. Alternatively, you can use the following steps to do the same thing manually:
 
 1. Build the Crystal compiler from source, from PR [#10870](https://github.com/crystal-lang/crystal/pull/10870).
 
     ```sh
-    git clone https://github.com/lbguilherme/crystal.git
-    cd crystal
-    git checkout feat/webassembly
-    make
-    cd ..
+    git clone -b feat/webassembly https://github.com/lbguilherme/crystal.git crystal-wasm
+    make -C crystal-wasm
     ```
 
 2. Build your code with this compiler, targetting:
 
     ```sh
-    crystal/bin/crystal build demo.cr --cross-compile --target wasm32-unknown-wasi
+    crystal-wasm/bin/crystal build demo.cr --cross-compile --target wasm32-unknown-wasi
     ```
 
     This will produce two files: a `demo.wasm` and a `web.js`.
@@ -137,7 +138,7 @@ There are several steps required to get the demo working for you. Here is the gu
 
 6. Start a WebServer:
 
-    ```html
+    ```sh
     python3 -mhttp.server
     ```
 
@@ -150,7 +151,7 @@ The previous steps create an unoptimized debug build. To optimize it (for speed/
 1. Compile in release mode:
 
     ```sh
-    crystal/bin/crystal build --release demo.cr --cross-compile --target wasm32-unknown-wasi
+    crystal-wasm/bin/crystal build --release demo.cr --cross-compile --target wasm32-unknown-wasi
     ```
 
 2. Link removing debug symbols and compressing sections:

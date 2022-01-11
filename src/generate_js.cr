@@ -20,7 +20,7 @@ async function runCrystalApp(wasmHref) {
   }
 
   function read_string(pos, len) {
-    return String.fromCharCode(...new Uint8Array(mem.buffer, pos, len))
+    return String.fromCharCode.apply(null, new Uint8Array(mem.buffer, pos, len))
   }
 
   const imports = {
@@ -38,11 +38,11 @@ END
       },
       fd_fdstat_get(fd, buf) {
         if (fd > 2) return 8;
-        mem.setUint8(buf, 4); // WASI_FILETYPE_REGULAR_FILE
-        mem.setUint16(buf + 2, 0);
-        mem.setUint16(buf + 4, 0);
-        mem.setBigUint64(buf + 8, BigInt(0));
-        mem.setBigUint64(buf + 16, BigInt(0));
+        mem.setUint8(buf, 4, true); // WASI_FILETYPE_REGULAR_FILE
+        mem.setUint16(buf + 2, 0, true);
+        mem.setUint16(buf + 4, 0, true);
+        mem.setBigUint64(buf + 8, BigInt(0), true);
+        mem.setBigUint64(buf + 16, BigInt(0), true);
         return 0;
       },
       fd_fdstat_set_flags(fd) {
@@ -51,21 +51,34 @@ END
       },
       fd_filestat_get(fd, buf) {
         if (fd > 2) return 8;
-        mem.setBigUint64(buf, BigInt(0));
-        mem.setBigUint64(buf + 8, BigInt(0));
-        mem.setUint8(buf + 16, 4); // WASI_FILETYPE_REGULAR_FILE
-        mem.setBigUint64(buf + 24, BigInt(1));
-        mem.setBigUint64(buf + 32, BigInt(0));
-        mem.setBigUint64(buf + 40, BigInt(0));
-        mem.setBigUint64(buf + 48, BigInt(0));
-        mem.setBigUint64(buf + 56, BigInt(0));
+        mem.setBigUint64(buf, BigInt(0), true);
+        mem.setBigUint64(buf + 8, BigInt(0), true);
+        mem.setUint8(buf + 16, 4, true); // WASI_FILETYPE_REGULAR_FILE
+        mem.setBigUint64(buf + 24, BigInt(1), true);
+        mem.setBigUint64(buf + 32, BigInt(0), true);
+        mem.setBigUint64(buf + 40, BigInt(0), true);
+        mem.setBigUint64(buf + 48, BigInt(0), true);
+        mem.setBigUint64(buf + 56, BigInt(0), true);
         return 0;
       },
       fd_seek() {
         throw new Error("fd_seek");
       },
-      fd_write() {
-        throw new Error("fd_write");
+      fd_write(fd, iovs, length, bytes_written_ptr) {
+        if (fd < 1 || fd > 2) return 8;
+        let bytes_written = 0;
+        for (let i = 0; i < length; i++) {
+          const buf = mem.getUint32(iovs + i * 8, true);
+          const len = mem.getUint32(iovs + i * 8 + 4, true);
+          const arr = new Uint8Array(mem.buffer, buf, len);
+          bytes_written += len;
+          if (fd === 1)
+            console.log(String.fromCharCode.apply(null, arr));
+          else
+            console.error(String.fromCharCode.apply(null, arr));
+        }
+        mem.setUint32(bytes_written_ptr, bytes_written, true);
+        return 0;
       },
       proc_exit() {
         throw new Error("proc_exit");

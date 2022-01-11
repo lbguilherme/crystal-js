@@ -3,11 +3,17 @@ require "./javascript"
 module Web
   include JavaScript::ExpandMethods
 
+  @@window : Window?
+
   @[JavaScript::Method]
-  def self.window : Window
+  private def self.get_window : Window
     <<-js
       return window;
     js
+  end
+
+  def self.window
+    @@window ||= get_window
   end
 
   abstract class EventTarget < JavaScript::Value

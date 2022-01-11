@@ -15,6 +15,7 @@ async function runCrystalApp(wasmHref) {
   }
 
   function drop_ref(index) {
+    if (index === 0) return;
     heap[index] = undefined;
     free.push(index);
   }

@@ -71,12 +71,8 @@ END
         for (let i = 0; i < length; i++) {
           const buf = mem.getUint32(iovs + i * 8, true);
           const len = mem.getUint32(iovs + i * 8 + 4, true);
-          const arr = new Uint8Array(mem.buffer, buf, len);
           bytes_written += len;
-          if (fd === 1)
-            console.log(String.fromCharCode.apply(null, arr));
-          else
-            console.error(String.fromCharCode.apply(null, arr));
+          (fd === 1 ? console.log : console.error)(read_string(buf, len));
         }
         mem.setUint32(bytes_written_ptr, bytes_written, true);
         return 0;

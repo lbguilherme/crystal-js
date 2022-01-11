@@ -97,7 +97,7 @@ then
   wasm-ld "$WORK_DIR/obj.wasm" -o $OUTPUT_FILE -L "$SCRIPT_DIR"/wasm32-wasi -lc -lclang_rt.builtins-wasm32 -lpcre --import-undefined --no-entry --export __crystal_main
 else
   wasm-ld "$WORK_DIR/obj.wasm" -o "$WORK_DIR/linked.wasm" -L "$SCRIPT_DIR"/wasm32-wasi -lc -lclang_rt.builtins-wasm32 -lpcre --import-undefined --no-entry --export __crystal_main --strip-all --compress-relocations
-  wasm-opt "$WORK_DIR/linked.wasm" -o $OUTPUT_FILE -O3 --converge
+  wasm-opt "$WORK_DIR/linked.wasm" -o $OUTPUT_FILE -Oz --converge
   uglifyjs "$JAVASCRIPT_OUTPUT_FILE" --compress --mangle -o "$WORK_DIR/opt.js"
   mv "$WORK_DIR/opt.js" "$JAVASCRIPT_OUTPUT_FILE"
 fi

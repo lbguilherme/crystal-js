@@ -1,6 +1,6 @@
 require "json"
 
-File.open("web.js", "w") do |js|
+File.open(ENV["JAVASCRIPT_OUTPUT_FILE"] || "web.js", "w") do |js|
   js << <<-END
 async function runCrystalApp(wasmHref) {
   const heap = [null];
@@ -33,7 +33,9 @@ END
   js << <<-END
     },
     wasi_snapshot_preview1: {
-      fd_close() { throw new Error("fd_close"); },
+      fd_close() {
+        throw new Error("fd_close");
+      },
       fd_fdstat_get(fd, buf) {
         if (fd > 2) return 8;
         mem.setUint8(buf, 4); // WASI_FILETYPE_REGULAR_FILE
@@ -43,7 +45,10 @@ END
         mem.setBigUint64(buf + 16, BigInt(0));
         return 0;
       },
-      fd_fdstat_set_flags(fd) { if (fd > 2) return 8; throw new Error("fd_fdstat_set_flags"); },
+      fd_fdstat_set_flags(fd) {
+        if (fd > 2) return 8;
+        throw new Error("fd_fdstat_set_flags");
+      },
       fd_filestat_get(fd, buf) {
         if (fd > 2) return 8;
         mem.setBigUint64(buf, BigInt(0));
@@ -56,9 +61,15 @@ END
         mem.setBigUint64(buf + 56, BigInt(0));
         return 0;
       },
-      fd_seek() { throw new Error("fd_seek"); },
-      fd_write() { throw new Error("fd_write"); },
-      proc_exit() { throw new Error("proc_exit"); },
+      fd_seek() {
+        throw new Error("fd_seek");
+      },
+      fd_write() {
+        throw new Error("fd_write");
+      },
+      proc_exit() {
+        throw new Error("proc_exit");
+      },
       random_get(buf, len) {
         crypto.getRandomValues(new Uint8Array(mem.buffer, buf, len));
         return 0;

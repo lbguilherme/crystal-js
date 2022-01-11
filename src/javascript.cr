@@ -88,15 +88,18 @@ module JavaScript
               cr_args = [] of Nil
               fun_name = "_js#{::JavaScript::JS_FUNCTIONS.size+1}".id
               fun_args_decl = [] of Nil
+              literal = true
 
               pieces.each do |piece|
-                if piece.class_name == "StringLiteral"
+                if literal
                   js_body += piece
                 else
                   type = if piece.class_name == "Var" && piece.id == "self"
                     @type
                   elsif piece.class_name == "Cast"
                     piece.to.resolve
+                  elsif piece.class_name == "StringLiteral"
+                    String
                   elsif piece.class_name == "Var" && method.args.find(&.name.id.== piece.id) && method.args.find(&.name.id.== piece.id).restriction
                     method.args.find(&.name.id.== piece.id).restriction.resolve
                   else
@@ -131,6 +134,8 @@ module JavaScript
                     piece.raise "Can't handle type '#{type}' as a JavaScript argument."
                   end
                 end
+
+                literal = !literal
               end
 
               js_body += "\n"

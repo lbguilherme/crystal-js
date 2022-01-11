@@ -6,15 +6,13 @@ module JavaScript
 
   abstract class Value
     struct ExternalReferenceIndex
-      property index : Int32
+      getter index : Int32
 
       def initialize(@index)
       end
     end
 
-    @extern_ref : ExternalReferenceIndex
-
-    def initialize(@extern_ref)
+    def initialize(@extern_ref : ExternalReferenceIndex)
     end
 
     def inspect(io)
@@ -24,7 +22,7 @@ module JavaScript
     @[JavaScript::Method]
     def finalize
       <<-js
-        drop_ref(#{@extern_ref.value.as(Int32)});
+        drop_ref(#{@extern_ref.index.as(Int32)});
       js
     end
 

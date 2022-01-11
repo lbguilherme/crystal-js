@@ -44,7 +44,7 @@ module Test
   # be aware that not all types are supported yet.
   @[JavaScript::Method]
   def self.add(first : Int32, second : Int32) : Int32
-    # This is now a raw string interpolation. The notation here is used to pass
+    # This is NOT a raw string interpolation. The notation here is used to pass
     # valid values to JavaScript land.
     <<-js
       return #{first} + #{second}; // This is JavaScript!

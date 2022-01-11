@@ -188,6 +188,7 @@ private def generate_output_js_file
   {%
     js = <<-END
     async function runCrystalApp(wasmHref) {
+      const decoder = new TextDecoder();
       const heap = [null];
       const free = [];
       let instance;
@@ -206,7 +207,7 @@ private def generate_output_js_file
       }
 
       function read_string(pos, len) {
-        return String.fromCharCode.apply(null, new Uint8Array(mem.buffer, pos, len))
+        return decoder.decode(new Uint8Array(mem.buffer, pos, len))
       }
 
       const imports = {
@@ -214,8 +215,8 @@ private def generate_output_js_file
 
     END
 
-    ::JavaScript::JS_FUNCTIONS.map(&.[3]).each do |func|
-      js += "      #{func.id},\n"
+    ::JavaScript::JS_FUNCTIONS.each do |func|
+      js += "      #{func[3].id},\n"
     end
 
     js += <<-END
@@ -282,7 +283,7 @@ private def generate_output_js_file
 
     END
 
-    `printf #{js} > #{env("JAVASCRIPT_OUTPUT_FILE") || "web.js"}`
+    system("printf #{js} > #{env("JAVASCRIPT_OUTPUT_FILE") || "web.js"}")
   %}
 end
 

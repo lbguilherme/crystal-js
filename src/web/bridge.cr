@@ -4,61 +4,6 @@ module JavaScript
   annotation Method
   end
 
-  abstract class Reference
-    record ReferenceIndex, index : Int32
-
-    def initialize(@extern_ref : ReferenceIndex)
-    end
-
-    def inspect(io)
-      to_s(io)
-    end
-
-    @[JavaScript::Method]
-    def finalize
-      <<-js
-        drop_ref(#{@extern_ref.index.as(Int32)});
-      js
-    end
-
-    macro js_getter(decl)
-      @[::JavaScript::Method]
-      def {{decl.var.stringify.underscore.id}} : {{decl.type}}
-        <<-js
-          return #{self}.{{decl.var.id}};
-        js
-      end
-    end
-
-    macro js_setter(decl)
-      @[::JavaScript::Method]
-      private def internal_setter_{{decl.var.stringify.underscore.id}}(value : {{decl.type}})
-        <<-js
-          #{self}.{{decl.var.id}} = #{value};
-        js
-      end
-
-      def {{decl.var.stringify.underscore.id}}=(value : {{decl.type}})
-        internal_setter_{{decl.var.stringify.underscore.id}}(value)
-        value
-      end
-    end
-
-    macro js_property(decl)
-      js_getter(decl)
-      js_setter(decl)
-    end
-
-    macro js_method(call, ret = Nil)
-      @[::JavaScript::Method]
-      def {{call.name.stringify.underscore.id}}({{*call.args}}) : {{ret}}
-        <<-js
-          return #{self}.{{call.name.id}}({{*call.args.map { |arg| "\#{#{arg.var}}".id }}});
-        js
-      end
-    end
-  end
-
   module ExpandMethods
     macro included
       macro finished
@@ -107,13 +52,13 @@ module JavaScript
                     fun_args_decl << "#{arg.id} : Int32".id
                     js_body += "heap[#{arg.id}]"
                     cr_args << "#{piece.id}.@extern_ref.index".id
-                  elsif [Int8, Int16, Int32, UInt8, UInt16, UInt32].includes? type
+                  elsif [Int8, Int16, Int32, UInt8, UInt16, UInt32, Bool].includes? type
                     arg = "arg#{js_args.size+1}"
                     js_args << arg
                     fun_args_decl << "#{arg.id} : #{type.id}".id
                     js_body += arg
                     cr_args << piece
-                  elsif type == String
+                  elsif type == ::String
                     arg_buf = "arg#{js_args.size+1}"
                     js_args << arg_buf
                     arg_len = "arg#{js_args.size+1}"
@@ -135,14 +80,17 @@ module JavaScript
 
               js_body += "\n"
 
-              return_type = method.return_type ? method.return_type.resolve : Nil
+              return_type = method.return_type ? method.return_type.class_name == "Self" ? @type : method.return_type.resolve : Nil
               if return_type == Nil
                 fun_ret = "Void".id
               elsif return_type.ancestors.includes? ::JavaScript::Reference
                 fun_ret = "Int32".id
                 js_body = "return make_ref((() => { #{js_body.id} })());"
-              elsif [Int8, Int16, Int32, UInt8, UInt16, UInt32].includes? return_type
+              elsif [Int8, Int16, Int32, UInt8, UInt16, UInt32, Bool].includes? return_type
                 fun_ret = return_type
+              elsif return_type == ::String
+                fun_ret = "Void*".id
+                js_body = "return make_string((() => { #{js_body.id} })());"
               else
                 method.return_type.raise "Can't handle type '#{return_type}' as a JavaScript return type."
               end
@@ -157,11 +105,13 @@ module JavaScript
               %}
 
               \{{ cr_vars.join("\n").id }}
-              \{% if [Int8, Int16, Int32, UInt8, UInt16, UInt32, Nil].includes? return_type %}
+              \{% if [Int8, Int16, Int32, UInt8, UInt16, UInt32, Bool, Nil].includes? return_type %}
                 ::LibJavaScript.\{{ fun_name }}(\{{*cr_args}})
               \{% elsif return_type.ancestors.includes? ::JavaScript::Reference %}
                 ref = ::LibJavaScript.\{{ fun_name }}(\{{*cr_args}})
                 \{{return_type}}.new(::JavaScript::Reference::ReferenceIndex.new(ref))
+              \{% elsif return_type == ::String %}
+                ::LibJavaScript.\{{ fun_name }}(\{{*cr_args}}).as(::String)
               \{% end %}
             end
           \{% end %}
@@ -189,6 +139,9 @@ private def generate_output_js_file
       const free = [];
       let instance;
       let mem;
+      let malloc_atomic;
+      let malloc;
+      let string_type_id;
 
       function make_ref(element) {
         const index = free.length ? free.pop() : heap.length;
@@ -206,13 +159,26 @@ private def generate_output_js_file
         return decoder.decode(new Uint8Array(mem.buffer, pos, len))
       }
 
+      function make_string(str) {
+        const data = encoder.encode(str);
+        const ptr = malloc_atomic(13 + data.byteLength);
+        mem.setUint32(ptr, string_type_id, true);
+        mem.setUint32(ptr + 4, data.byteLength, true);
+        mem.setUint32(ptr + 8, str.length, true);
+        for (let i = 0; i < data.byteLength; i++) {
+          mem.setUint8(ptr + 12 + i, data[i]);
+        }
+        mem.setUint8(ptr + 12 + data.byteLength, 0);
+        return ptr;
+      }
+
       const imports = {
         env: {
 
     END
 
     ::JavaScript::JS_FUNCTIONS.each do |func|
-      js += "      #{func[3].id},\n"
+      js += "      #{func[3].id},\n" if func[4]
     end
 
     js += <<-END
@@ -322,6 +288,9 @@ private def generate_output_js_file
       instance = wasm.instance;
       instance.exports.memory.grow(1);
       mem = new DataView(instance.exports.memory.buffer);
+      malloc_atomic = instance.exports.__js_bridge_malloc_atomic;
+      malloc = instance.exports.__js_bridge_malloc;
+      string_type_id = instance.exports.__js_bridge_get_type_id(0);
       instance.exports.__original_main();
     }
 
@@ -340,5 +309,22 @@ macro finished
         \{{ "fun #{func[0]}(#{func[1].join(", ").id}) : #{func[2]}".id }}
       \{% end %}
     end
+  end
+end
+
+fun __js_bridge_malloc_atomic(size : UInt32) : Void*
+  GC.malloc_atomic(size)
+end
+
+fun __js_bridge_malloc(size : UInt32) : Void*
+  GC.malloc(size)
+end
+
+fun __js_bridge_get_type_id(type : Int32) : Int32
+  case type
+  when 0
+    String::TYPE_ID
+  else
+    0
   end
 end

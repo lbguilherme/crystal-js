@@ -1,4 +1,4 @@
-require "./javascript"
+require "./reference"
 
 module Web
   include JavaScript::ExpandMethods

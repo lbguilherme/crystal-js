@@ -3,6 +3,7 @@ set -e
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 CRYSTAL="$SCRIPT_DIR"/crystal/bin/crystal
+CRYSTAL_OPTS=""
 
 POSITIONAL_ARGS=()
 
@@ -10,6 +11,11 @@ while [[ $# -gt 0 ]]; do
   case $1 in
     --release)
       RELEASE_MODE=1
+      CRYSTAL_OPTS="$CRYSTAL_OPTS --release"
+      shift
+    ;;
+    --error-trace)
+      CRYSTAL_OPTS="$CRYSTAL_OPTS --error-trace"
       shift
     ;;
     -o)
@@ -63,6 +69,7 @@ fi
 
 if ! "$CRYSTAL" --version &>/dev/null
 then
+  rm -rf "$SCRIPT_DIR"/crystal
   git clone -b feat/webassembly https://github.com/lbguilherme/crystal.git "$SCRIPT_DIR"/crystal
   make -C "$SCRIPT_DIR"/crystal
 fi
@@ -90,13 +97,13 @@ function cleanup {
 
 trap cleanup EXIT
 export JAVASCRIPT_OUTPUT_FILE="${OUTPUT_FILE%.wasm}.js"
-"$CRYSTAL" build "$INPUT_FILE" -o "$WORK_DIR/obj" ${RELEASE_MODE:+--release} --cross-compile --target wasm32-unknown-wasi
+"$CRYSTAL" build "$INPUT_FILE" -o "$WORK_DIR/obj" $CRYSTAL_OPTS --cross-compile --target wasm32-unknown-wasi
 
 if [ -z "$RELEASE_MODE" ]
 then
-  wasm-ld "$WORK_DIR/obj.wasm" -o $OUTPUT_FILE -L "$SCRIPT_DIR"/wasm32-wasi -lc -lclang_rt.builtins-wasm32 -lpcre --import-undefined --no-entry --export __crystal_main
+  wasm-ld "$WORK_DIR/obj.wasm" -o $OUTPUT_FILE -L "$SCRIPT_DIR"/wasm32-wasi -lc -lclang_rt.builtins-wasm32 -lpcre --import-undefined --no-entry --export __original_main
 else
-  wasm-ld "$WORK_DIR/obj.wasm" -o "$WORK_DIR/linked.wasm" -L "$SCRIPT_DIR"/wasm32-wasi -lc -lclang_rt.builtins-wasm32 -lpcre --import-undefined --no-entry --export __crystal_main --strip-all --compress-relocations
+  wasm-ld "$WORK_DIR/obj.wasm" -o "$WORK_DIR/linked.wasm" -L "$SCRIPT_DIR"/wasm32-wasi -lc -lclang_rt.builtins-wasm32 -lpcre --import-undefined --no-entry --export __original_main --strip-all --compress-relocations
   wasm-opt "$WORK_DIR/linked.wasm" -o $OUTPUT_FILE -Oz --converge
   uglifyjs "$JAVASCRIPT_OUTPUT_FILE" --compress --mangle -o "$WORK_DIR/opt.js"
   mv "$WORK_DIR/opt.js" "$JAVASCRIPT_OUTPUT_FILE"

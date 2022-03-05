@@ -16,7 +16,7 @@ module Web
     @@window ||= get_window
   end
 
-  abstract class EventTarget < JavaScript::Value
+  abstract class EventTarget < JavaScript::Reference
   end
 
   abstract class Node < EventTarget
@@ -35,7 +35,7 @@ module Web
   class HTMLBodyElement < HTMLElement
   end
 
-  class CanvasContext < JavaScript::Value
+  class CanvasContext < JavaScript::Reference
     js_setter font : String
     js_method fillText(text : String, x : Int32, y : Int32)
   end
@@ -49,7 +49,7 @@ module Web
     js_getter body : HTMLBodyElement
   end
 
-  class Console < JavaScript::Value
+  class Console < JavaScript::Reference
     js_method log(message : String)
   end
 

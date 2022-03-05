@@ -4,15 +4,10 @@ module JavaScript
   annotation Method
   end
 
-  abstract class Value
-    struct ExternalReferenceIndex
-      getter index : Int32
+  abstract class Reference
+    record ReferenceIndex, index : Int32
 
-      def initialize(@index)
-      end
-    end
-
-    def initialize(@extern_ref : ExternalReferenceIndex)
+    def initialize(@extern_ref : ReferenceIndex)
     end
 
     def inspect(io)
@@ -39,7 +34,7 @@ module JavaScript
       @[::JavaScript::Method]
       private def internal_setter_{{decl.var.stringify.underscore.id}}(value : {{decl.type}})
         <<-js
-          return #{self}.{{decl.var.id}} = #{value};
+          #{self}.{{decl.var.id}} = #{value};
         js
       end
 
@@ -106,7 +101,7 @@ module JavaScript
                     piece.raise "Can't infer the type of this JavaScript argument: '#{piece.id}' (#{piece.class_name.id})"
                   end
 
-                  if type.ancestors.includes? ::JavaScript::Value
+                  if type.ancestors.includes? ::JavaScript::Reference
                     arg = "arg#{js_args.size+1}"
                     js_args << arg
                     fun_args_decl << "#{arg.id} : Int32".id
@@ -143,7 +138,7 @@ module JavaScript
               return_type = method.return_type ? method.return_type.resolve : Nil
               if return_type == Nil
                 fun_ret = "Void".id
-              elsif return_type.ancestors.includes? ::JavaScript::Value
+              elsif return_type.ancestors.includes? ::JavaScript::Reference
                 fun_ret = "Int32".id
                 js_body = "return make_ref((() => { #{js_body.id} })());"
               elsif [Int8, Int16, Int32, UInt8, UInt16, UInt32].includes? return_type
@@ -164,9 +159,9 @@ module JavaScript
               \{{ cr_vars.join("\n").id }}
               \{% if [Int8, Int16, Int32, UInt8, UInt16, UInt32, Nil].includes? return_type %}
                 ::LibJavaScript.\{{ fun_name }}(\{{*cr_args}})
-              \{% elsif return_type.ancestors.includes? ::JavaScript::Value %}
+              \{% elsif return_type.ancestors.includes? ::JavaScript::Reference %}
                 ref = ::LibJavaScript.\{{ fun_name }}(\{{*cr_args}})
-                \{{return_type}}.new(::JavaScript::Value::ExternalReferenceIndex.new(ref))
+                \{{return_type}}.new(::JavaScript::Reference::ReferenceIndex.new(ref))
               \{% end %}
             end
           \{% end %}
@@ -175,7 +170,7 @@ module JavaScript
     end
   end
 
-  class Value
+  class Reference
     include ExpandMethods
 
     macro inherited
@@ -188,6 +183,7 @@ private def generate_output_js_file
   {%
     js = <<-END
     async function runCrystalApp(wasmHref) {
+      const encoder = new TextEncoder();
       const decoder = new TextDecoder();
       const heap = [null];
       const free = [];
@@ -250,8 +246,26 @@ private def generate_output_js_file
             mem.setBigUint64(buf + 56, BigInt(0), true);
             return 0;
           },
+          fd_prestat_get() {
+            return 8; // WASI_EBADF
+          },
+          fd_prestat_dir_name() {
+            return 8; // WASI_EBADF
+          },
           fd_seek() {
             throw new Error("fd_seek");
+          },
+          fd_read() {
+            throw new Error("fd_read");
+          },
+          path_create_directory() {
+            throw new Error("path_create_directory");
+          },
+          path_filestat_get() {
+            throw new Error("path_filestat_get");
+          },
+          path_open() {
+            throw new Error("path_open");
           },
           fd_write(fd, iovs, length, bytes_written_ptr) {
             if (fd < 1 || fd > 2) return 8;
@@ -260,25 +274,55 @@ private def generate_output_js_file
               const buf = mem.getUint32(iovs + i * 8, true);
               const len = mem.getUint32(iovs + i * 8 + 4, true);
               bytes_written += len;
-              (fd === 1 ? console.log : console.error)(read_string(buf, len));
+              #{if env("CRYSTAL_WEB_EMIT_DENO")
+                "Deno.writeAllSync(fd === 1 ? Deno.stdout : Deno.stderr, new Uint8Array(mem.buffer, buf, len));".id
+              else
+                "(fd === 1 ? console.log : console.error)(read_string(buf, len));".id
+              end}
             }
             mem.setUint32(bytes_written_ptr, bytes_written, true);
             return 0;
           },
-          proc_exit() {
-            throw new Error("proc_exit");
+          proc_exit(exitcode) {
+            throw new Error("proc_exit " + exitcode);
           },
           random_get(buf, len) {
             crypto.getRandomValues(new Uint8Array(mem.buffer, buf, len));
             return 0;
           },
+          environ_get() {
+            return 0;
+          },
+          environ_sizes_get(count_ptr, buf_size_ptr) {
+            mem.setUint32(count_ptr, 0, true);
+            mem.setUint32(buf_size_ptr, 0, true);
+            return 0;
+          },
+          clock_time_get(clock_id, precision, time_ptr) {
+            const time = BigInt((clock_id === 0 ? Date.now() : performance.now()) * 1000000);
+            mem.setBigUint64(time_ptr, time, true);
+            return 0;
+          },
+          args_sizes_get(argc_ptr, argv_buf_size_ptr) {
+            mem.setUint32(argc_ptr, 1, true);
+            mem.setUint32(argv_buf_size_ptr, encoder.encode(wasmHref).length + 1, true);
+          },
+          args_get(argv_ptr, argv_buf_ptr) {
+            mem.setUint32(argv_ptr, argv_buf_ptr, true);
+            const data = encoder.encode(wasmHref);
+            for (let i = 0; i < data.length; i++) {
+              mem.setUint8(argv_buf_ptr + i, data[i]);
+            }
+            mem.setUint8(argv_buf_ptr + data.length, 0);
+          }
         }
       };
 
       const wasm = await WebAssembly.instantiate(await (await fetch(wasmHref)).arrayBuffer(), imports);
       instance = wasm.instance;
-      mem = new DataView(instance.exports.memory.buffer)
-      instance.exports.__crystal_main(0, 0);
+      instance.exports.memory.grow(1);
+      mem = new DataView(instance.exports.memory.buffer);
+      instance.exports.__original_main();
     }
 
     END

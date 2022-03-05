@@ -284,7 +284,7 @@ private def generate_output_js_file
         }
       };
 
-      const wasm = await WebAssembly.instantiate(await (await fetch(wasmHref)).arrayBuffer(), imports);
+      const wasm = await WebAssembly.instantiateStreaming(fetch(wasmHref), imports);
       instance = wasm.instance;
       instance.exports.memory.grow(1);
       mem = new DataView(instance.exports.memory.buffer);

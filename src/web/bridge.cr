@@ -52,12 +52,18 @@ module JavaScript
                     fun_args_decl << "#{arg.id} : Int32".id
                     js_body += "heap[#{arg.id}]"
                     cr_args << "#{piece.id}.@extern_ref.index".id
-                  elsif [Int8, Int16, Int32, UInt8, UInt16, UInt32, Bool].includes? type
+                  elsif [Int8, Int16, Int32, UInt8, UInt16, UInt32].includes? type
                     arg = "arg#{js_args.size+1}"
                     js_args << arg
                     fun_args_decl << "#{arg.id} : #{type.id}".id
                     js_body += arg
                     cr_args << piece
+                  elsif type == ::Bool
+                    arg = "arg#{js_args.size+1}"
+                    js_args << arg
+                    fun_args_decl << "#{arg.id} : UInt8".id
+                    js_body += "(#{arg} == 1)"
+                    cr_args << "((#{piece.id}) ? 1 : 0)"
                   elsif type == ::String
                     arg_buf = "arg#{js_args.size+1}"
                     js_args << arg_buf
@@ -86,8 +92,11 @@ module JavaScript
               elsif return_type.ancestors.includes? ::JavaScript::Reference
                 fun_ret = "Int32".id
                 js_body = "return make_ref((() => { #{js_body.id} })());"
-              elsif [Int8, Int16, Int32, UInt8, UInt16, UInt32, Bool].includes? return_type
+              elsif [Int8, Int16, Int32, UInt8, UInt16, UInt32].includes? return_type
                 fun_ret = return_type
+              elsif return_type == Bool
+                fun_ret = "UInt8".id
+                js_body = "return (() => { #{js_body.id} })() ? 1 : 0;"
               elsif return_type == ::String
                 fun_ret = "Void*".id
                 js_body = "return make_string((() => { #{js_body.id} })());"
@@ -105,13 +114,15 @@ module JavaScript
               %}
 
               \{{ cr_vars.join("\n").id }}
-              \{% if [Int8, Int16, Int32, UInt8, UInt16, UInt32, Bool, Nil].includes? return_type %}
+              \{% if [Int8, Int16, Int32, UInt8, UInt16, UInt32, Nil].includes? return_type %}
                 ::LibJavaScript.\{{ fun_name }}(\{{*cr_args}})
               \{% elsif return_type.ancestors.includes? ::JavaScript::Reference %}
                 ref = ::LibJavaScript.\{{ fun_name }}(\{{*cr_args}})
                 \{{return_type}}.new(::JavaScript::Reference::ReferenceIndex.new(ref))
               \{% elsif return_type == ::String %}
                 ::LibJavaScript.\{{ fun_name }}(\{{*cr_args}}).as(::String)
+              \{% elsif return_type == Bool %}
+                ::LibJavaScript.\{{ fun_name }}(\{{*cr_args}}) == 1
               \{% end %}
             end
           \{% end %}

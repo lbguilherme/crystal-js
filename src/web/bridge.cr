@@ -41,17 +41,22 @@ module JavaScript
                   elsif piece.class_name == "StringLiteral"
                     String
                   elsif piece.class_name == "Var" && method.args.find(&.name.id.== piece.id) && method.args.find(&.name.id.== piece.id).restriction
-                    method.args.find(&.name.id.== piece.id).restriction.resolve
+                    index = method.args.map_with_index {|arg, idx| [arg, idx] }.find(&.[0].name.id.== piece.id)[1]
+                    arg_type = method.args[index].restriction.resolve
+                    method.splat_index == index ? parse_type("Enumerable(#{arg_type.id})").resolve : arg_type
                   else
                     piece.raise "Can't infer the type of this JavaScript argument: '#{piece.id}' (#{piece.class_name.id})"
                   end
 
-                  if type.ancestors.includes? ::JavaScript::Reference
+                  if type < ::JavaScript::Reference
                     arg = "arg#{js_args.size+1}"
                     js_args << arg
                     fun_args_decl << "#{arg.id} : Int32".id
                     js_body += "heap[#{arg.id}]"
                     cr_args << "#{piece.id}.@extern_ref.index".id
+                  elsif type <= ::Enumerable
+                    base_type = ([type] + type.ancestors).select {|x| x <= Enumerable }.last.type_vars[0]
+                    piece.raise "TODO: Enumerable of #{base_type}"
                   elsif [Int8, Int16, Int32, UInt8, UInt16, UInt32].includes? type
                     arg = "arg#{js_args.size+1}"
                     js_args << arg
@@ -116,7 +121,7 @@ module JavaScript
               \{{ cr_vars.join("\n").id }}
               \{% if [Int8, Int16, Int32, UInt8, UInt16, UInt32, Nil].includes? return_type %}
                 ::LibJavaScript.\{{ fun_name }}(\{{*cr_args}})
-              \{% elsif return_type.ancestors.includes? ::JavaScript::Reference %}
+              \{% elsif return_type < ::JavaScript::Reference %}
                 ref = ::LibJavaScript.\{{ fun_name }}(\{{*cr_args}})
                 \{{return_type}}.new(::JavaScript::Reference::ReferenceIndex.new(ref))
               \{% elsif return_type == ::String %}

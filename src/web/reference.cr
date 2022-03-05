@@ -50,7 +50,7 @@ module JavaScript
       @[::JavaScript::Method]
       def {{call.name.stringify.underscore.id}}({{*call.args}}) : {{ret}}
         <<-js
-          return #{self}.{{call.name.id}}({{*call.args.map { |arg| "\#{#{arg.var}}".id }}});
+          return #{self}.{{call.name.id}}({{*call.args.map { |arg| "#{arg.class_name == "Splat" ? "...".id : "".id}\#{#{arg.class_name == "Splat" ? arg.exp.var : arg.var}}".id }}});
         js
       end
     end

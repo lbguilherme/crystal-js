@@ -13,7 +13,7 @@ module JavaScript
     js_method charAt(index : Int32), ::String
     js_method codeCodeAt(index : Int32), UInt16
     js_method codePointAt(index : Int32), UInt32
-    #js_method concat(*str : ::String), ::String
+    # js_method concat(*str : ::String), ::String
     js_method endsWith(str : ::String), Bool
     js_method endsWith(str : ::String, length : Int32), Bool
   end

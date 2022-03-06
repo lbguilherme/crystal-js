@@ -22,10 +22,10 @@ See [crystal-web-demo](https://github.com/lbguilherme/crystal-web-demo) for an e
 
 ## Usage
 
-For basic usage you can `require "web/dom"` and then use DOM related classes and methods. The global `window` object will be accessible at `Web.window`.
+For basic usage you can `require "web"` and then use DOM related classes and methods. The global `window` object will be accessible at `Web.window`.
 
 ```crystal
-require "web/dom"
+require "web"
 
 Web.window.console.log("Hello from the Web!")
 ```
@@ -33,7 +33,7 @@ Web.window.console.log("Hello from the Web!")
 You can define special methods that run JavaScript code from Crystal. They can take parameters but their body must be a single string literal using interpolation to receive arguments:
 
 ```crystal
-require "web/javascript"
+require "web"
 
 module Test
   # You need to include this module. It won't add any new methods, all it will do
@@ -98,7 +98,9 @@ Only the methods that are actually called will be generated in the output `web.j
 
 ## Building your project
 
-You can use `shards install` and then build with `lib/web/scripts/build.sh src/main.cr`. Alternatively, you can use the following steps to do the same thing manually:
+You can use `shards install` and then build with `lib/web/scripts/build.sh src/main.cr`. Use the `--release` flag for an optimized build.
+
+Alternatively, you can use the following steps to do the same thing manually:
 
 1. Build the Crystal compiler from source, from PR [#10870](https://github.com/crystal-lang/crystal/pull/10870).
 
@@ -124,7 +126,7 @@ You can use `shards install` and then build with `lib/web/scripts/build.sh src/m
 4. Link your final WebAssembly binary:
 
     ```sh
-    wasm-ld demo.wasm -o demo-final.wasm libc.a libclang_rt.builtins-wasm32.a libpcre.a --import-undefined --no-entry --export __crystal_main
+    wasm-ld demo.wasm -o demo-final.wasm libc.a libclang_rt.builtins-wasm32.a libpcre.a --import-undefined --no-entry --export __original_main --export __js_bridge_malloc_atomic --export __js_bridge_malloc --export __js_bridge_get_type_id
     ```
 
     If you don't have `wasm-ld`, install the "lld" or "llvm-lld" packages. https://lld.llvm.org/WebAssembly.html.
@@ -170,7 +172,7 @@ The previous steps create an unoptimized debug build. To optimize it (for speed/
 
 ## How to contribute?
 
-- Help defining more standard DOM interfaces at `src/dom.cr` (good start)
+- Help defining more standard DOM interfaces at `src/web/dom.cr` (good start)
 - Build cool demos and examples with this library (awesome)
-- Support more types for the bridge at `src/javascript.cr` (complex)
+- Support more types for the bridge at `src/web/bridge.cr` (complex)
 - Identify, report and/or fix bugs

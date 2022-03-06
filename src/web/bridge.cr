@@ -48,7 +48,7 @@ module JavaScript
                     piece.raise "Can't infer the type of this JavaScript argument: '#{piece.id}' (#{piece.class_name.id})"
                   end
 
-                  if type < ::JavaScript::Reference
+                  if type <= ::JavaScript::Reference
                     arg = "arg#{js_args.size+1}"
                     js_args << arg
                     fun_args_decl << [arg.id, "Int32".id]
@@ -94,7 +94,7 @@ module JavaScript
               return_type = method.return_type ? method.return_type.class_name == "Self" ? @type : method.return_type.resolve : Nil
               if return_type == Nil
                 fun_ret = "Void".id
-              elsif return_type.ancestors.includes? ::JavaScript::Reference
+              elsif return_type < ::JavaScript::Reference
                 fun_ret = "Int32".id
                 js_body = "return make_ref((() => { #{js_body.id} })());"
               elsif [Int8, Int16, Int32, UInt8, UInt16, UInt32].includes? return_type

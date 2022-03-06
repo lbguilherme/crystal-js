@@ -54,5 +54,14 @@ module JavaScript
         js
       end
     end
+
+    macro inherited
+      @[JavaScript::Method]
+      def dup : self
+        <<-js
+          return #{self};
+        js
+      end
+    end
   end
 end

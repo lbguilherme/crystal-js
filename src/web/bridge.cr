@@ -257,10 +257,10 @@ private def generate_output_js_file
               const len = mem.getUint32(iovs + i * 8 + 4, true);
               bytes_written += len;
               #{if env("CRYSTAL_WEB_EMIT_DENO")
-                "Deno.writeAllSync(fd === 1 ? Deno.stdout : Deno.stderr, new Uint8Array(mem.buffer, buf, len));".id
-              else
-                "(fd === 1 ? console.log : console.error)(read_string(buf, len));".id
-              end}
+                  "Deno.writeAllSync(fd === 1 ? Deno.stdout : Deno.stderr, new Uint8Array(mem.buffer, buf, len));".id
+                else
+                  "(fd === 1 ? console.log : console.error)(read_string(buf, len));".id
+                end}
             }
             mem.setUint32(bytes_written_ptr, bytes_written, true);
             return 0;

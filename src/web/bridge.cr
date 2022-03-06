@@ -51,7 +51,7 @@ module JavaScript
                   if type < ::JavaScript::Reference
                     arg = "arg#{js_args.size+1}"
                     js_args << arg
-                    fun_args_decl << "#{arg.id} : Int32".id
+                    fun_args_decl << [arg.id, "Int32".id]
                     js_body += "heap[#{arg.id}]"
                     cr_args << "#{piece.id}.@extern_ref.index".id
                   elsif type <= ::Enumerable
@@ -60,22 +60,22 @@ module JavaScript
                   elsif [Int8, Int16, Int32, UInt8, UInt16, UInt32].includes? type
                     arg = "arg#{js_args.size+1}"
                     js_args << arg
-                    fun_args_decl << "#{arg.id} : #{type.id}".id
+                    fun_args_decl << [arg.id, type.id]
                     js_body += arg
                     cr_args << piece
                   elsif type == ::Bool
                     arg = "arg#{js_args.size+1}"
                     js_args << arg
-                    fun_args_decl << "#{arg.id} : UInt8".id
+                    fun_args_decl << [arg.id, "UInt8".id]
                     js_body += "(#{arg} == 1)"
-                    cr_args << "((#{piece.id}) ? 1 : 0)"
+                    cr_args << "((#{piece.id}) ? 1 : 0)".id
                   elsif type == ::String
                     arg_buf = "arg#{js_args.size+1}"
                     js_args << arg_buf
                     arg_len = "arg#{js_args.size+1}"
                     js_args << arg_len
-                    fun_args_decl << "#{arg_buf.id} : Int32".id
-                    fun_args_decl << "#{arg_len.id} : Int32".id
+                    fun_args_decl << [arg_buf.id, "Int32".id]
+                    fun_args_decl << [arg_len.id, "Int32".id]
                     js_body += "read_string(#{arg_buf.id}, #{arg_len.id})"
                     var = "__var#{cr_vars.size+1}"
                     cr_vars << "#{var.id} = #{piece.id}"
@@ -322,7 +322,7 @@ macro finished
 
     lib LibJavaScript
       \{% for func in JavaScript::JS_FUNCTIONS %}
-        \{{ "fun #{func[0]}(#{func[1].join(", ").id}) : #{func[2]}".id }}
+        \{{ "fun #{func[0]}(#{func[1].map { |(arg, type)| "#{arg} : #{type}".id }.join(", ").id}) : #{func[2]}".id }}
       \{% end %}
     end
   end

@@ -21,7 +21,8 @@ describe "string" do
     str.length.should eq 6
 
     JavaScript::String.new("☃★♲").code_point_at(1).should eq 9733
-    JavaScript::String.new("☃★♲").at(1).should eq "★"
+    JavaScript::String.new("☃★♲").at(1).should eq JavaScript::String.new("★")
+    JavaScript::String.new("☃★♲").at(1).to_crystal.should eq "★"
     str.ends_with("llo!").should be_true
     str.ends_with("what").should be_false
   end

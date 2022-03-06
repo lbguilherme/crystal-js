@@ -64,7 +64,8 @@ module JavaScript
                     String
                   elsif piece.class_name == "Var" && method.args.find(&.name.id.== piece.id) && method.args.find(&.internal_name.id.== piece.id).restriction
                     index = method.args.map_with_index {|arg, idx| [arg, idx] }.find(&.[0].internal_name.id.== piece.id)[1]
-                    arg_type = method.args[index].restriction.resolve
+                    arg_type = method.args[index].restriction
+                    arg_type = arg_type.class_name == "Self" ? @type : arg_type.resolve
                     method.splat_index == index ? parse_type("Enumerable(#{arg_type.id})").resolve : arg_type
                   else
                     piece.raise "Can't infer the type of this JavaScript argument: '#{piece.id}' (#{piece.class_name.id})"

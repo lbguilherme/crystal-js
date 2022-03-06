@@ -1,10 +1,9 @@
 #!/bin/bash
 set -e
 
-rm -rf .tmp
-mkdir .tmp
-mkdir .tmp/lib
+rm -rf .tmp/*
 
+mkdir -p .tmp/lib
 ln -s "$PWD" .tmp/lib/web
 
 cd .tmp

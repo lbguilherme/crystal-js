@@ -67,7 +67,7 @@ module JavaScript
                     arg = "arg#{js_args.size+1}"
                     js_args << arg
                     fun_args_decl << [arg.id, "UInt8".id]
-                    js_body += "(#{arg} == 1)"
+                    js_body += "(#{arg.id} === 1)"
                     cr_args << "((#{piece.id}) ? 1 : 0)".id
                   elsif type == ::String
                     arg_buf = "arg#{js_args.size+1}"

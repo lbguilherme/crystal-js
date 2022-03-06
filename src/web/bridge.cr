@@ -1,6 +1,8 @@
 module JavaScript
   JS_FUNCTIONS = [] of Nil
 
+  JS_TYPE_READERS = {} of Nil => Nil
+
   annotation Method
   end
 
@@ -22,13 +24,33 @@ module JavaScript
                 method.raise "If present, the method receiver can't be anything other than 'self'."
               end
 
+              type_size = {
+                Int8 => 1, UInt8 => 1,
+                Int16 => 2, UInt16 => 2,
+                Int32 => 4, UInt32 => 4,
+                Int64 => 8, UInt64 => 8
+              }
+
+              js_mem_read = {
+                Int8 => "mem.getInt8($POS$)",
+                UInt8 => "mem.getUint8($POS$)",
+                Int16 => "mem.getInt16($POS$, true)",
+                UInt16 => "mem.getUint16($POS$, true)",
+                Int32 => "mem.getInt32($POS$, true)",
+                UInt32 => "mem.getUint32($POS$, true)",
+                Int64 => "mem.getBigInt64($POS$, true)",
+                UInt64 => "mem.getBigUint64($POS$, true)",
+              }
+
+              js_prepare = ""
               js_body = "\n"
               js_args = [] of Nil
-              cr_vars = [] of Nil
+              cr_prepare = ""
               cr_args = [] of Nil
-              fun_name = "_js#{::JavaScript::JS_FUNCTIONS.size+1}".id
               fun_args_decl = [] of Nil
+              fun_name = "_js#{::JavaScript::JS_FUNCTIONS.size+1}".id
               literal = true
+              var_counter = 0
 
               pieces.each do |piece|
                 if literal
@@ -40,50 +62,120 @@ module JavaScript
                     piece.to.resolve
                   elsif piece.class_name == "StringLiteral"
                     String
-                  elsif piece.class_name == "Var" && method.args.find(&.name.id.== piece.id) && method.args.find(&.name.id.== piece.id).restriction
-                    index = method.args.map_with_index {|arg, idx| [arg, idx] }.find(&.[0].name.id.== piece.id)[1]
+                  elsif piece.class_name == "Var" && method.args.find(&.name.id.== piece.id) && method.args.find(&.internal_name.id.== piece.id).restriction
+                    index = method.args.map_with_index {|arg, idx| [arg, idx] }.find(&.[0].internal_name.id.== piece.id)[1]
                     arg_type = method.args[index].restriction.resolve
                     method.splat_index == index ? parse_type("Enumerable(#{arg_type.id})").resolve : arg_type
                   else
                     piece.raise "Can't infer the type of this JavaScript argument: '#{piece.id}' (#{piece.class_name.id})"
                   end
 
-                  if type <= ::JavaScript::Reference
-                    arg = "arg#{js_args.size+1}"
-                    js_args << arg
-                    fun_args_decl << [arg.id, "Int32".id]
-                    js_body += "heap[#{arg.id}]"
-                    cr_args << "#{piece.id}.@extern_ref.index".id
-                  elsif type <= ::Enumerable
-                    base_type = ([type] + type.ancestors).select {|x| x <= Enumerable }.last.type_vars[0]
-                    piece.raise "TODO: Enumerable of #{base_type}"
-                  elsif [Int8, Int16, Int32, UInt8, UInt16, UInt32].includes? type
-                    arg = "arg#{js_args.size+1}"
-                    js_args << arg
-                    fun_args_decl << [arg.id, type.id]
-                    js_body += arg
-                    cr_args << piece
-                  elsif type == ::Bool
-                    arg = "arg#{js_args.size+1}"
-                    js_args << arg
-                    fun_args_decl << [arg.id, "UInt8".id]
-                    js_body += "(#{arg.id} === 1)"
-                    cr_args << "((#{piece.id}) ? 1 : 0)".id
-                  elsif type == ::String
-                    arg_buf = "arg#{js_args.size+1}"
-                    js_args << arg_buf
-                    arg_len = "arg#{js_args.size+1}"
-                    js_args << arg_len
-                    fun_args_decl << [arg_buf.id, "Int32".id]
-                    fun_args_decl << [arg_len.id, "Int32".id]
-                    js_body += "read_string(#{arg_buf.id}, #{arg_len.id})"
-                    var = "__var#{cr_vars.size+1}"
-                    cr_vars << "#{var.id} = #{piece.id}"
-                    cr_args << "#{var.id}.to_unsafe.address".id
-                    cr_args << "#{var.id}.bytesize".id
-                  else
-                    piece.raise "Can't handle type '#{type}' as a JavaScript argument."
+                  type_information = {type: type, value: piece}
+                  types_to_process = [type_information]
+                  types_to_expand = [type_information]
+
+                  types_to_process.each do |info|
+                    info[:js_prepare] = ""
+                    info[:js_body] = ""
+                    info[:js_args] = [] of Nil
+                    info[:cr_prepare] = ""
+                    info[:cr_args] = [] of Nil
+                    info[:fun_args_decl] = [] of Nil
+
+                    if info[:type] <= ::JavaScript::Reference
+                      arg = "arg#{var_counter += 1}".id
+                      info[:js_args] << arg
+                      info[:fun_args_decl] << [arg, Int32]
+                      info[:js_body] += "heap[#{arg}]"
+                      info[:cr_args] << "#{info[:value].id}.@extern_ref.index".id
+                    elsif info[:type] <= ::Enumerable
+                      base_type = ([info[:type]] + info[:type].ancestors).select { |x| x <= Enumerable }.last.type_vars[0]
+                      info[:type] = parse_type("Enumerable(#{base_type.id})").resolve
+                      info[:base_type] = {type: base_type, value: "e".id}
+                      types_to_process << info[:base_type]
+                      types_to_expand.unshift info[:base_type]
+                    elsif [Int8, Int16, Int32, UInt8, UInt16, UInt32].includes? info[:type]
+                      arg = "arg#{var_counter += 1}".id
+                      info[:js_args] << arg
+                      info[:fun_args_decl] << [arg, info[:type]]
+                      info[:js_body] += "#{arg}"
+                      info[:cr_args] << info[:value]
+                    elsif info[:type] == ::Bool
+                      arg = "arg#{var_counter += 1}".id
+                      info[:js_args] << arg
+                      info[:fun_args_decl] << [arg, UInt8]
+                      info[:js_body] += "(#{arg} === 1)"
+                      info[:cr_args] << "((#{info[:value].id}) ? 1 : 0)".id
+                    elsif info[:type] == ::String
+                      arg_buf = "arg#{var_counter += 1}".id
+                      arg_len = "arg#{var_counter += 1}".id
+                      info[:js_args] << arg_buf
+                      info[:js_args] << arg_len
+                      info[:fun_args_decl] << [arg_buf, UInt32]
+                      info[:fun_args_decl] << [arg_len, Int32]
+                      info[:js_body] += "read_string(#{arg_buf}, #{arg_len})"
+                      tmp_var = "__var#{var_counter += 1}"
+                      info[:cr_prepare] += "#{tmp_var.id} = (#{info[:value].id})\n"
+                      info[:cr_args] << "#{tmp_var.id}.to_unsafe.address.to_u32".id
+                      info[:cr_args] << "#{tmp_var.id}.bytesize".id
+                    else
+                      piece.raise "Can't handle type '#{info[:type]}' as a JavaScript argument."
+                    end
+
+                    if types_to_process.size > 10
+                      piece.raise "Can't handle type '#{type_information[:type]}' as a JavaScript argument, it is too deep."
+                    end
                   end
+
+                  types_to_expand.each do |info|
+                    if info[:type] <= ::Enumerable
+                      arg_buf = "arg#{var_counter += 1}".id
+                      arg_len = "arg#{var_counter += 1}".id
+                      info[:js_args] << arg_buf
+                      info[:js_args] << arg_len
+                      info[:fun_args_decl] << [arg_buf, UInt32]
+                      info[:fun_args_decl] << [arg_len, Int32]
+                      size_per_element = info[:base_type][:fun_args_decl].map { |(_, type)| type_size[type] }.reduce(0) { |a, b| a + b }
+                      value_var = "__var#{var_counter += 1}"
+                      size_var = "__var#{var_counter += 1}"
+                      buf_var = "__var#{var_counter += 1}"
+                      index_var = "__var#{var_counter += 1}"
+                      info[:cr_prepare] += "#{value_var.id} = (#{info[:value].id})\n"
+                      info[:cr_prepare] += "#{size_var.id} = #{value_var.id}.size\n"
+                      info[:cr_prepare] += "#{buf_var.id} = GC.malloc_atomic(#{size_per_element} * #{size_var.id}).as(UInt8*)\n"
+                      info[:cr_prepare] += "#{index_var.id} = 0\n"
+                      info[:cr_prepare] += "#{value_var.id}.each do |e|\n"
+                      info[:cr_prepare] += info[:base_type][:cr_prepare] + "\n"
+                      info[:base_type][:fun_args_decl].each_with_index do |(var, type), idx|
+                        info[:cr_prepare] += "(#{buf_var.id} + #{index_var.id}).as(#{type}*).value = (#{info[:base_type][:cr_args][idx]})\n"
+                        info[:cr_prepare] += "#{index_var.id} += #{type_size[type]}\n"
+                      end
+                      info[:cr_prepare] += "end\n"
+                      info[:cr_args] << "#{buf_var.id}.address.to_u32".id
+                      info[:cr_args] << size_var.id
+                      unless ::JavaScript::JS_TYPE_READERS[info[:type]]
+                        name = "__read_type_#{::JavaScript::JS_TYPE_READERS.size+1}"
+                        reader_function = "  function #{name.id}(buf, size) { // #{info[:type]}\n"
+                        reader_function += "    return Array.from({length: size}, () => {\n"
+                        info[:base_type][:fun_args_decl].each_with_index do |(var, type), idx|
+                          reader_function += "      const #{info[:base_type][:js_args][idx]} = #{js_mem_read[type].gsub(/\$POS\$/, "buf").id};\n"
+                          reader_function += "      buf += #{type_size[type]};\n"
+                        end
+                        reader_function += "      return #{info[:base_type][:js_body].id};\n"
+                        reader_function += "    });\n"
+                        reader_function += "  }"
+                        ::JavaScript::JS_TYPE_READERS[info[:type]] = [name, reader_function]
+                      end
+                      info[:js_body] += "#{::JavaScript::JS_TYPE_READERS[info[:type]][0].id}(#{arg_buf}, #{arg_len})"
+                    end
+                  end
+
+                  js_prepare += type_information[:js_prepare]
+                  js_body += type_information[:js_body]
+                  js_args += type_information[:js_args]
+                  cr_prepare += type_information[:cr_prepare]
+                  cr_args += type_information[:cr_args]
+                  fun_args_decl += type_information[:fun_args_decl]
                 end
 
                 literal = !literal
@@ -109,16 +201,27 @@ module JavaScript
                 method.return_type.raise "Can't handle type '#{return_type}' as a JavaScript return type."
               end
 
-              js_code = "#{fun_name}(#{js_args.join(", ").id}) { #{js_body.id} }"
+              js_code = "#{fun_name}(#{js_args.join(", ").id}) { #{js_prepare.id} #{js_body.id} }"
               ::JavaScript::JS_FUNCTIONS << [fun_name, fun_args_decl, fun_ret, js_code, false]
             %}
-            def \{{ method.receiver ? "#{method.receiver.id}.".id : "".id }}\{{ method.name }}(\{{*method.args}}) : \{{method.return_type || Nil}}
+            def \{{ method.receiver ? "#{method.receiver.id}.".id : "".id }}\{{ method.name }}(\{{
+              *method.args.map_with_index do |arg, index|
+                (
+                  (index == method.splat_index ? "*" : "") +
+                  "#{arg.name}" +
+                  (arg.name != arg.internal_name ? " #{arg.internal_name}" : "") +
+                  (arg.restriction.class_name == "Nop" ? "" : " : #{arg.restriction}") +
+                  (arg.default_value.class_name == "Nop" ? "" : " = #{arg.default_value}")
+                ).id
+              end
+            }}) : \{{method.return_type || Nil}}
               \\{%
                 fun_name = \{{fun_name.stringify}}
                 ::JavaScript::JS_FUNCTIONS.find {|x| x[0] == fun_name }[4] = true
               %}
 
-              \{{ cr_vars.join("\n").id }}
+              \{{ cr_prepare.id }}
+
               \{% if [Int8, Int16, Int32, UInt8, UInt16, UInt32, Nil].includes? return_type %}
                 ::LibJavaScript.\{{ fun_name }}(\{{*cr_args}})
               \{% elsif return_type < ::JavaScript::Reference %}
@@ -187,6 +290,14 @@ private def generate_output_js_file
         mem.setUint8(ptr + 12 + data.byteLength, 0);
         return ptr;
       }
+
+    END
+
+    ::JavaScript::JS_TYPE_READERS.values.each do |pair|
+      js += "\n#{pair[1].id}\n"
+    end
+
+    js += <<-END
 
       const imports = {
         env: {

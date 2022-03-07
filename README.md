@@ -55,12 +55,12 @@ end
 five = Test.add(2, 3) # Returns 5.
 ```
 
-More complex examples can be created using `JavaScript::Value`, an abstract base class capable of holding references to JavaScript values.
+More complex examples can be created using `JavaScript::Reference`, an abstract base class capable of holding references to JavaScript values.
 
 ```crystal
-require "web/javascript"
+require "web"
 
-class MyObj < JavaScript::Value
+class MyObj < JavaScript::Reference
   @[JavaScript::Method]
   def self.new(data : String) : MyObj
     <<-js

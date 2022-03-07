@@ -1,7 +1,7 @@
 module JavaScript
   JS_FUNCTIONS = [] of Nil
 
-  JS_TYPE_READERS = {} of Nil => Nil
+  JS_HELPERS = {} of Nil => Nil
 
   annotation Method
   end
@@ -51,6 +51,8 @@ module JavaScript
               fun_name = "_js#{::JavaScript::JS_FUNCTIONS.size+1}".id
               literal = true
               var_counter = 0
+
+              required_helpers = [] of Nil
 
               pieces.each do |piece|
                 if literal
@@ -114,7 +116,15 @@ module JavaScript
                       info[:js_args] << arg_len
                       info[:fun_args_decl] << [arg_buf, UInt32]
                       info[:fun_args_decl] << [arg_len, Int32]
-                      info[:js_body] += "read_string(#{arg_buf}, #{arg_len})"
+                      unless ::JavaScript::JS_HELPERS[{:read, info[:type]}]
+                        name = "__helper_#{::JavaScript::JS_HELPERS.size+1}"
+                        body = "  function #{name.id}(pos, len) { // read String\n"
+                        body += "    return decoder.decode(new Uint8Array(mem.buffer, pos, len));\n"
+                        body += "  }"
+                        ::JavaScript::JS_HELPERS[{:read, info[:type]}] = [name, body, false]
+                      end
+                      required_helpers << {:read, info[:type]}
+                      info[:js_body] += "#{::JavaScript::JS_HELPERS[{:read, info[:type]}][0].id}(#{arg_buf}, #{arg_len})"
                       tmp_var = "__var#{var_counter += 1}"
                       info[:cr_prepare] += "#{tmp_var.id} = (#{info[:value].id})\n"
                       info[:cr_args] << "#{tmp_var.id}.to_unsafe.address.to_u32".id
@@ -154,20 +164,21 @@ module JavaScript
                       info[:cr_prepare] += "end\n"
                       info[:cr_args] << "#{buf_var.id}.address.to_u32".id
                       info[:cr_args] << size_var.id
-                      unless ::JavaScript::JS_TYPE_READERS[info[:type]]
-                        name = "__read_type_#{::JavaScript::JS_TYPE_READERS.size+1}"
-                        reader_function = "  function #{name.id}(buf, size) { // #{info[:type]}\n"
-                        reader_function += "    return Array.from({length: size}, () => {\n"
+                      unless ::JavaScript::JS_HELPERS[{:read, info[:type]}]
+                        name = "__helper_#{::JavaScript::JS_HELPERS.size+1}"
+                        body = "  function #{name.id}(buf, size) { // read #{info[:type]}\n"
+                        body += "    return Array.from({length: size}, () => {\n"
                         info[:base_type][:fun_args_decl].each_with_index do |(var, type), idx|
-                          reader_function += "      const #{info[:base_type][:js_args][idx]} = #{js_mem_read[type].gsub(/\$POS\$/, "buf").id};\n"
-                          reader_function += "      buf += #{type_size[type]};\n"
+                          body += "      const #{info[:base_type][:js_args][idx]} = #{js_mem_read[type].gsub(/\$POS\$/, "buf").id};\n"
+                          body += "      buf += #{type_size[type]};\n"
                         end
-                        reader_function += "      return #{info[:base_type][:js_body].id};\n"
-                        reader_function += "    });\n"
-                        reader_function += "  }"
-                        ::JavaScript::JS_TYPE_READERS[info[:type]] = [name, reader_function]
+                        body += "      return #{info[:base_type][:js_body].id};\n"
+                        body += "    });\n"
+                        body += "  }"
+                        ::JavaScript::JS_HELPERS[{:read, info[:type]}] = [name, body, false]
                       end
-                      info[:js_body] += "#{::JavaScript::JS_TYPE_READERS[info[:type]][0].id}(#{arg_buf}, #{arg_len})"
+                      required_helpers << {:read, info[:type]}
+                      info[:js_body] += "#{::JavaScript::JS_HELPERS[{:read, info[:type]}][0].id}(#{arg_buf}, #{arg_len})"
                     end
                   end
 
@@ -189,7 +200,7 @@ module JavaScript
                 fun_ret = "Void".id
               elsif return_type < ::JavaScript::Reference
                 fun_ret = "Int32".id
-                js_body = "return make_ref((() => { #{js_body.id} })());"
+                js_body = "return __make_ref((() => { #{js_body.id} })());"
               elsif [Int8, Int16, Int32, UInt8, UInt16, UInt32].includes? return_type
                 fun_ret = return_type
               elsif return_type == Bool
@@ -197,13 +208,30 @@ module JavaScript
                 js_body = "return (() => { #{js_body.id} })() ? 1 : 0;"
               elsif return_type == ::String
                 fun_ret = "Void*".id
-                js_body = "return make_string((() => { #{js_body.id} })());"
+                unless ::JavaScript::JS_HELPERS[{:write, return_type}]
+                  name = "__helper_#{::JavaScript::JS_HELPERS.size+1}"
+                  body = "  function #{name.id}(str) { // write String\n"
+                  body += "    const data = encoder.encode(str);\n"
+                  body += "    const ptr = malloc_atomic(13 + data.byteLength);\n"
+                  body += "    mem.setUint32(ptr, string_type_id, true);\n"
+                  body += "    mem.setUint32(ptr + 4, data.byteLength, true);\n"
+                  body += "    mem.setUint32(ptr + 8, str.length, true);\n"
+                  body += "    for (let i = 0; i < data.byteLength; i++) {\n"
+                  body += "      mem.setUint8(ptr + 12 + i, data[i]);\n"
+                  body += "    }\n"
+                  body += "    mem.setUint8(ptr + 12 + data.byteLength, 0);\n"
+                  body += "    return ptr;\n"
+                  body += "  }"
+                  ::JavaScript::JS_HELPERS[{:write, return_type}] = [name, body, false]
+                end
+                required_helpers << {:write, return_type}
+                js_body =  "return #{::JavaScript::JS_HELPERS[{:write, return_type}][0].id}((() => { #{js_body.id} })());"
               else
                 method.return_type.raise "Can't handle type '#{return_type}' as a JavaScript return type."
               end
 
               js_code = "#{fun_name}(#{js_args.join(", ").id}) { #{js_prepare.id} #{js_body.id} }"
-              ::JavaScript::JS_FUNCTIONS << [fun_name, fun_args_decl, fun_ret, js_code, false]
+              ::JavaScript::JS_FUNCTIONS << [fun_name, fun_args_decl, fun_ret, js_code, false, required_helpers]
             %}
             def \{{ method.receiver ? "#{method.receiver.id}.".id : "".id }}\{{ method.name }}(\{{
               *method.args.map_with_index do |arg, index|
@@ -218,7 +246,11 @@ module JavaScript
             }}) : \{{method.return_type || Nil}}
               \\{%
                 fun_name = \{{fun_name.stringify}}
-                ::JavaScript::JS_FUNCTIONS.find {|x| x[0] == fun_name }[4] = true
+                func = ::JavaScript::JS_FUNCTIONS.find {|x| x[0] == fun_name }
+                func[4] = true
+                func[5].each do |helper_id|
+                  ::JavaScript::JS_HELPERS[helper_id][2] = true
+                end
               %}
 
               \{{ cr_prepare.id }}
@@ -255,7 +287,7 @@ private def generate_output_js_file
     async function runCrystalApp(wasmHref) {
       const encoder = new TextEncoder();
       const decoder = new TextDecoder();
-      const heap = [null];
+      const heap = [];
       const free = [];
       let instance;
       let mem;
@@ -263,39 +295,22 @@ private def generate_output_js_file
       let malloc;
       let string_type_id;
 
-      function make_ref(element) {
+      function __make_ref(element) {
         const index = free.length ? free.pop() : heap.length;
         heap[index] = element;
         return index;
       }
 
-      function drop_ref(index) {
+      function __drop_ref(index) {
         if (index === 0) return;
         heap[index] = undefined;
         free.push(index);
       }
 
-      function read_string(pos, len) {
-        return decoder.decode(new Uint8Array(mem.buffer, pos, len))
-      }
-
-      function make_string(str) {
-        const data = encoder.encode(str);
-        const ptr = malloc_atomic(13 + data.byteLength);
-        mem.setUint32(ptr, string_type_id, true);
-        mem.setUint32(ptr + 4, data.byteLength, true);
-        mem.setUint32(ptr + 8, str.length, true);
-        for (let i = 0; i < data.byteLength; i++) {
-          mem.setUint8(ptr + 12 + i, data[i]);
-        }
-        mem.setUint8(ptr + 12 + data.byteLength, 0);
-        return ptr;
-      }
-
     END
 
-    ::JavaScript::JS_TYPE_READERS.values.each do |pair|
-      js += "\n#{pair[1].id}\n"
+    ::JavaScript::JS_HELPERS.values.each do |helper|
+      js += "\n#{helper[1].id}\n" if helper[2]
     end
 
     js += <<-END
@@ -371,7 +386,7 @@ private def generate_output_js_file
               #{if env("CRYSTAL_WEB_EMIT_DENO")
                   "Deno.writeAllSync(fd === 1 ? Deno.stdout : Deno.stderr, new Uint8Array(mem.buffer, buf, len));".id
                 else
-                  "(fd === 1 ? console.log : console.error)(read_string(buf, len));".id
+                  "(fd === 1 ? console.log : console.error)(decoder.decode(new Uint8Array(mem.buffer, buf, len)));".id
                 end}
             }
             mem.setUint32(bytes_written_ptr, bytes_written, true);

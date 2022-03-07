@@ -93,7 +93,6 @@ module JavaScript
                       info[:cr_args] << "#{info[:value].id}.@extern_ref.index".id
                     elsif info[:type] <= ::Enumerable
                       base_type = ([info[:type]] + info[:type].ancestors).select { |x| x <= Enumerable }.last.type_vars[0]
-                      info[:type] = parse_type("Enumerable(#{base_type.id})").resolve
                       info[:base_type] = {type: base_type, value: "e".id}
                       types_to_process << info[:base_type]
                       types_to_expand.unshift info[:base_type]
@@ -140,6 +139,7 @@ module JavaScript
 
                   types_to_expand.each do |info|
                     if info[:type] <= ::Enumerable
+                      info[:type] = parse_type("Enumerable(#{info[:base_type][:type].id})").resolve
                       arg_buf = "arg#{var_counter += 1}".id
                       arg_len = "arg#{var_counter += 1}".id
                       info[:js_args] << arg_buf

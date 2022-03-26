@@ -302,7 +302,6 @@ private def generate_output_js_file
       }
 
       function __drop_ref(index) {
-        if (index === 0) return;
         heap[index] = undefined;
         free.push(index);
       }
@@ -383,11 +382,13 @@ private def generate_output_js_file
               const buf = mem.getUint32(iovs + i * 8, true);
               const len = mem.getUint32(iovs + i * 8 + 4, true);
               bytes_written += len;
-              #{if env("CRYSTAL_WEB_EMIT_DENO")
-                  "Deno.writeAllSync(fd === 1 ? Deno.stdout : Deno.stderr, new Uint8Array(mem.buffer, buf, len));".id
-                else
-                  "(fd === 1 ? console.log : console.error)(decoder.decode(new Uint8Array(mem.buffer, buf, len)));".id
-                end}
+              if (globalThis.Deno) {
+                Deno.writeAllSync(fd === 1 ? Deno.stdout : Deno.stderr, new Uint8Array(mem.buffer, buf, len));
+              } else if (globalThis.process) {
+                (fd === 1 ? process.stdout.write : process.stderr.write)(new Uint8Array(mem.buffer, buf, len));
+              } else {
+                (fd === 1 ? console.log : console.error)(decoder.decode(new Uint8Array(mem.buffer, buf, len)));
+              }
             }
             mem.setUint32(bytes_written_ptr, bytes_written, true);
             return 0;

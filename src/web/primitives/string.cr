@@ -1,3 +1,5 @@
+require "../reference"
+
 module JavaScript
   class String < Reference
     @[JavaScript::Method]

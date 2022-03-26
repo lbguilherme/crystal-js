@@ -70,7 +70,7 @@ fi
 if ! "$CRYSTAL" --version &>/dev/null
 then
   rm -rf "$SCRIPT_DIR"/crystal
-  git clone -b feat/webassembly https://github.com/lbguilherme/crystal.git "$SCRIPT_DIR"/crystal
+  git clone https://github.com/crystal-lang/crystal.git --single-branch "$SCRIPT_DIR"/crystal
   make -C "$SCRIPT_DIR"/crystal
 fi
 

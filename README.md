@@ -102,10 +102,10 @@ You can use `shards install` and then build with `lib/web/scripts/build.sh src/m
 
 Alternatively, you can use the following steps to do the same thing manually:
 
-1. Build the Crystal compiler from source, from PR [#10870](https://github.com/crystal-lang/crystal/pull/10870).
+1. Build the Crystal compiler from source.
 
     ```sh
-    git clone -b feat/webassembly https://github.com/lbguilherme/crystal.git crystal-wasm
+    git clone https://github.com/crystal-lang/crystal.git crystal-wasm
     make -C crystal-wasm
     ```
 

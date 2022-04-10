@@ -98,7 +98,7 @@ trap cleanup EXIT
 export WASM_OUTPUT_FILE="$OUTPUT_FILE"
 export JAVASCRIPT_OUTPUT_FILE="${OUTPUT_FILE%.wasm}.js"
 export CRYSTAL_LIBRARY_PATH="$SCRIPT_DIR"/wasm32-wasi
-LINK_ARGS="-lclang_rt.builtins-wasm32 --import-undefined --no-entry --export __js_bridge_initialize --export __crystal_malloc_atomic --export __crystal_malloc --export __js_bridge_get_type_id"
+LINK_ARGS="-lclang_rt.builtins-wasm32 --allow-undefined --no-entry --export __js_bridge_initialize --export __crystal_malloc_atomic --export __crystal_malloc --export __js_bridge_get_type_id"
 
 if [ -z "$RELEASE_MODE" ]
 then

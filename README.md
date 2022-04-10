@@ -22,20 +22,20 @@ This library and WebAssembly with Crystal is highly experimental and still in th
 
 You can run your project:
 
-- with Deno: `deno run --allow-read main.js`;
-- with Node.js: `node main.js`;
+- with Deno: `deno run --allow-read main.js`
+- with Node.js: `node main.js`
 - on the Web: `<script defer src="main.js"></script>`
 
 See [crystal-web-demo](https://github.com/lbguilherme/crystal-web-demo) for an example project.
 
 ## Usage
 
-For basic usage you can `require "js"` and then use DOM related classes and methods. The global `window` object will be accessible at `Web.window`.
+For basic usage you can `require "js"` and then use common JavaScript methods and classes from the `JS` module.
 
 ```crystal
-require "js/console"
+require "js"
 
-JS.console.log "Hello from the Web!"
+JS.console.log "Hello from the JavaScript!"
 ```
 
 You can define special methods that run JavaScript code from Crystal. They can take parameters but their body must be a single string literal using interpolation to receive arguments:

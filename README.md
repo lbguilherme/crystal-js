@@ -38,6 +38,8 @@ require "js"
 JS.console.log "Hello from the JavaScript!"
 ```
 
+### Defining raw JavaScript methods
+
 You can define special methods that run JavaScript code from Crystal. They can take parameters but their body must be a single string literal using interpolation to receive arguments:
 
 ```crystal
@@ -63,7 +65,18 @@ end
 five = Test.add(2, 3) # Returns 5.
 ```
 
-More complex examples can be created using `JS::Reference`, an abstract base class capable of holding references to JavaScript values.
+JavaScript methods are always defined in a class or module that includes `JS::ExpandMethods`. Their body must be a single string literal that interpolates values. The string is raw JavaScript code that will be used as is, and the interpolations are placeholders to receive values from Crystal land. The bridging managed by this library handles converting the values to the appropriate type based on the annotations. Splat arguments are supported. The following types are supported:
+
+- `Int`, they become `number` on JavaScript land.
+- `String`, they are converted to `string`. Only proper UTF-8 is supported.
+- `Bool`, they become `boolean`.
+- `Enumerable(T)`, such as `Array`, `Tuple`, `Hash`, etc. They are converted to an array of `T`'s conversion.
+
+The return type restriction is used to convert the JavaScript return value to the corresponding Crystal type. Only `Int`, `String`, and `Bool` are supported for now.
+
+Unions are not supported yet.
+
+In some cases it may be better to keep the value on JavaScript land instead of converting it, and instead hold a reference to the value that can be used later. The `JS::Reference` class provides this interface. When used as an argument type or a return type, it does no conversion and returns a reference to the value. This class is abstract, you must define a subclass to handle your custom types. Here is a more complex example:
 
 ```crystal
 require "js"
@@ -104,3 +117,39 @@ p obj.size # => 4
 ```
 
 Only the methods that are actually called will be generated in the output `.js` file, thus it is fine to define lots of unused methods.
+
+Additionally, there are some helper functions to facilitate creating bindings to existing JavaScript APIs. Use `js_getter`, `js_setter`, `js_property`, and `js_method` to define matching methods. For example:
+
+
+```crystal
+require "js"
+
+class XMLHttpRequest < JS::Reference
+  @[JS::Method]
+  def self.new : self
+    <<-js
+      return new XMLHttpRequest();
+    js
+  end
+
+  js_getter readyState : Int32    # defines a `read_state` method.
+  js_getter responseText : String
+  js_getter status : Int32
+
+  # defines `response_type` and `response_type=` methods.
+  js_property responseType : String
+
+  # methods can be overloaded
+  js_method send
+  js_method send(body : String)
+  js_method open(method : String, url : String)
+
+  # for the return type use a comma, not a colon.
+  js_method getResponseHeader(header : String), String
+end
+
+req = XMLHttpRequest.new
+req.open("GET", "https://example.com")
+req.send
+p req.response_text
+```

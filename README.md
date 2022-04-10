@@ -1,10 +1,10 @@
 # crystal-js
 
-This library provides bindings to run a Crystal application in a JavaScript environment, such as Node.js or the Web. Using this it is possible to consume existing JavaScript API's inside Crystal when compiling for the WebAssembly target. It is similar to [wasm-bindgen](https://github.com/rustwasm/wasm-bindgen) from Rust.
+This library provides bindings to run a Crystal application in a JavaScript environment, such as Node.js or the Web. Using this it is possible to consume existing JavaScript API's inside Crystal when compiling for the WebAssembly target. It is similar to [`wasm-bindgen`](https://github.com/rustwasm/wasm-bindgen) from Rust.
 
 This library and WebAssembly with Crystal is highly experimental and still in the early days. Please report bugs.
 
-![demo](demo.png)
+For a Web APIs bindings see [`crystal-web`](https://github.com/lbguilherme/crystal-web).
 
 ## Installation
 

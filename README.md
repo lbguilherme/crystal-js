@@ -1,6 +1,8 @@
-# crystal-web
+# crystal-js
 
-This is an early proof of concept. It demonstrates that it is possible to develop Web front-end applications using Crystal. This library exposes the DOM and other browser JavaScript API's.
+This library provides bindings to run a Crystal application in a JavaScript environment, such as Node.js or the Web. Using this it is possible to consume existing JavaScript API's inside Crystal when compiling for the WebAssembly target. It is similar to [wasm-bindgen](https://github.com/rustwasm/wasm-bindgen) from Rust.
+
+This library and WebAssembly with Crystal is highly experimental and still in the early days. Please report bugs.
 
 ![demo](demo.png)
 
@@ -10,13 +12,13 @@ This is an early proof of concept. It demonstrates that it is possible to develo
 
    ```yaml
    dependencies:
-     web:
-       github: lbguilherme/crystal-web
+     js:
+       github: lbguilherme/crystal-js
    ```
 
 2. Run `shards install`
 
-3. Build your project with `lib/web/scripts/build.sh src/main.cr` Use the `--release` flag for an optimized build. This will produce two files: a `main.wasm` and a `main.js`.
+3. Build your project with `lib/js/scripts/build.sh src/main.cr` Use the `--release` flag for an optimized build. This will produce two files: a `main.wasm` and a `main.js`.
 
 You can run your project:
 
@@ -28,27 +30,27 @@ See [crystal-web-demo](https://github.com/lbguilherme/crystal-web-demo) for an e
 
 ## Usage
 
-For basic usage you can `require "web"` and then use DOM related classes and methods. The global `window` object will be accessible at `Web.window`.
+For basic usage you can `require "js"` and then use DOM related classes and methods. The global `window` object will be accessible at `Web.window`.
 
 ```crystal
-require "web"
+require "js/console"
 
-Web.window.console.log("Hello from the Web!")
+JS.console.log "Hello from the Web!"
 ```
 
 You can define special methods that run JavaScript code from Crystal. They can take parameters but their body must be a single string literal using interpolation to receive arguments:
 
 ```crystal
-require "web"
+require "js"
 
 module Test
   # You need to include this module. It won't add any new methods, all it will do
   # is expanding JavaScript methods you define.
-  include JavaScript::ExpandMethods
+  include JS::ExpandMethods
 
   # Mark JavaScript methods with this annotation. They must be fully typed and
   # be aware that not all types are supported yet.
-  @[JavaScript::Method]
+  @[JS::Method]
   def self.add(first : Int32, second : Int32) : Int32
     # This is NOT a raw string interpolation. The notation here is used to pass
     # valid values to JavaScript land.
@@ -61,31 +63,32 @@ end
 five = Test.add(2, 3) # Returns 5.
 ```
 
-More complex examples can be created using `JavaScript::Reference`, an abstract base class capable of holding references to JavaScript values.
+More complex examples can be created using `JS::Reference`, an abstract base class capable of holding references to JavaScript values.
 
 ```crystal
-require "web"
+require "js"
 
-class MyObj < JavaScript::Reference
-  @[JavaScript::Method]
+class MyObj < JS::Reference
+  @[JS::Method]
   def self.new(data : String) : MyObj
     <<-js
       const pieces = #{data}.split(', ')
-      return {
-        pieces,
+
+      return {                    // The value returned here will be held by MyObj
+        pieces,                   // and can later be accessed using `#{self}`.
         length: pieces.length
       };
     js
   end
 
-  @[JavaScript::Method]
+  @[JS::Method]
   def size : Int32
     <<-js
       return #{self}.length;
     js
   end
 
-  @[JavaScript::Method]
+  @[JS::Method]
   def add_piece(piece : String)
     <<-js
       #{self}.pieces.push(#{piece.strip.as(String)}); // You can use complex Crystal expressions,
@@ -100,11 +103,4 @@ obj.add_piece("d")
 p obj.size # => 4
 ```
 
-Only the methods that are actually called will be generated in the output `web.js` file, thus it is fine to define usused methods.
-
-## How to contribute?
-
-- Help defining more standard DOM interfaces at `src/web/dom.cr` (good start)
-- Build cool demos and examples with this library (awesome)
-- Support more types for the bridge at `src/web/bridge.cr` (complex)
-- Identify, report and/or fix bugs
+Only the methods that are actually called will be generated in the output `.js` file, thus it is fine to define lots of unused methods.

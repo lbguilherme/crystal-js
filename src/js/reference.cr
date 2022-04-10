@@ -1,6 +1,6 @@
 require "./bridge"
 
-module JavaScript
+module JS
   abstract class Reference
     record ReferenceIndex, index : Int32
 
@@ -11,7 +11,7 @@ module JavaScript
       to_s(io)
     end
 
-    @[JavaScript::Method]
+    @[JS::Method]
     def finalize
       <<-js
         drop_ref(#{@extern_ref.index.as(Int32)});
@@ -19,7 +19,7 @@ module JavaScript
     end
 
     macro js_getter(decl)
-      @[::JavaScript::Method]
+      @[::JS::Method]
       def {{decl.var.stringify.underscore.id}} : {{decl.type}}
         <<-js
           return #{self}.{{decl.var.id}};
@@ -28,7 +28,7 @@ module JavaScript
     end
 
     macro js_setter(decl)
-      @[::JavaScript::Method]
+      @[::JS::Method]
       private def internal_setter_{{decl.var.stringify.underscore.id}}(value : {{decl.type}})
         <<-js
           #{self}.{{decl.var.id}} = #{value};
@@ -47,7 +47,7 @@ module JavaScript
     end
 
     macro js_method(call, ret = Nil)
-      @[::JavaScript::Method]
+      @[::JS::Method]
       def {{call.name.stringify.underscore.id}}({{*call.args}}) : {{ret}}
         <<-js
           return #{self}.{{call.name.id}}({{*call.args.map { |arg| "#{arg.class_name == "Splat" ? "...".id : "".id}\#{#{arg.class_name == "Splat" ? arg.exp.var : arg.var}}".id }}});
@@ -56,7 +56,7 @@ module JavaScript
     end
 
     macro inherited
-      @[JavaScript::Method]
+      @[JS::Method]
       def dup : self
         <<-js
           return #{self};

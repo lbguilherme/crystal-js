@@ -1,11 +1,12 @@
 require "./reference"
+require "./console"
 
 module Web
-  include JavaScript::ExpandMethods
+  include JS::ExpandMethods
 
   @@window : Window?
 
-  @[JavaScript::Method]
+  @[JS::Method]
   private def self.get_window : Window
     <<-js
       return window;
@@ -16,7 +17,7 @@ module Web
     @@window ||= get_window
   end
 
-  abstract class EventTarget < JavaScript::Reference
+  abstract class EventTarget < JS::Reference
   end
 
   abstract class Node < EventTarget
@@ -35,7 +36,7 @@ module Web
   class HTMLBodyElement < HTMLElement
   end
 
-  class CanvasContext < JavaScript::Reference
+  class CanvasContext < JS::Reference
     js_setter font : String
     js_method fillText(text : String, x : Int32, y : Int32)
   end
@@ -49,12 +50,8 @@ module Web
     js_getter body : HTMLBodyElement
   end
 
-  class Console < JavaScript::Reference
-    js_method log(message : String)
-  end
-
   class Window < EventTarget
-    js_getter console : Console
+    js_getter console : JS::Console
     js_getter document : HTMLDocument
     js_getter innerWidth : Int32
     js_getter innerHeight : Int32

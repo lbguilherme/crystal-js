@@ -1,7 +1,7 @@
 private module Test
-  include JavaScript::ExpandMethods
+  include JS::ExpandMethods
 
-  @[JavaScript::Method]
+  @[JS::Method]
   def self.add32(first : Int32, second : Int32) : Int32
     <<-js
       if (typeof #{first} !== "number" || typeof #{second} !== "number") {
@@ -11,7 +11,7 @@ private module Test
     js
   end
 
-  @[JavaScript::Method]
+  @[JS::Method]
   def self.and(first : Bool, second : Bool) : Bool
     <<-js
       if (typeof #{first} !== "boolean" || typeof #{second} !== "boolean") {

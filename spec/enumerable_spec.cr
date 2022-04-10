@@ -1,21 +1,21 @@
 private module Test
-  include JavaScript::ExpandMethods
+  include JS::ExpandMethods
 
-  @[JavaScript::Method]
+  @[JS::Method]
   def self.array(array : Array(Int32)) : String
     <<-js
       return JSON.stringify(#{array});
     js
   end
 
-  @[JavaScript::Method]
+  @[JS::Method]
   def self.splat(*ints : Int32) : String
     <<-js
       return JSON.stringify(#{ints});
     js
   end
 
-  @[JavaScript::Method]
+  @[JS::Method]
   def self.double_array(array : Array(Array(Int32))) : String
     <<-js
       return JSON.stringify(#{array});

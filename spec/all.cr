@@ -1,5 +1,5 @@
 require "spec"
-require "../src/web"
+require "../src/js"
 require "./*"
 
 class Fiber

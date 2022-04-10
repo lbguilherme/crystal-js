@@ -1,7 +1,7 @@
-module JavaScript
-  JS_FUNCTIONS = [] of Nil
+module JS
+  FUNCTIONS = [] of Nil
 
-  JS_HELPERS = {} of Nil => Nil
+  HELPERS = {} of Nil => Nil
 
   annotation Method
   end
@@ -10,7 +10,7 @@ module JavaScript
     macro included
       macro finished
         \{% for method in @type.methods + @type.class.methods %}
-          \{% if method.annotation(::JavaScript::Method) %}
+          \{% if method.annotation(::JS::Method) %}
             \{%
               pieces = if method.body.is_a?(StringLiteral)
                 [method.body]
@@ -48,7 +48,7 @@ module JavaScript
               cr_prepare = ""
               cr_args = [] of Nil
               fun_args_decl = [] of Nil
-              fun_name = "_js#{::JavaScript::JS_FUNCTIONS.size+1}".id
+              fun_name = "_js#{::JS::FUNCTIONS.size+1}".id
               literal = true
               var_counter = 0
 
@@ -85,7 +85,7 @@ module JavaScript
                     info[:cr_args] = [] of Nil
                     info[:fun_args_decl] = [] of Nil
 
-                    if info[:type] <= ::JavaScript::Reference
+                    if info[:type] <= ::JS::Reference
                       arg = "arg#{var_counter += 1}".id
                       info[:js_args] << arg
                       info[:fun_args_decl] << [arg, Int32]
@@ -115,15 +115,15 @@ module JavaScript
                       info[:js_args] << arg_len
                       info[:fun_args_decl] << [arg_buf, UInt32]
                       info[:fun_args_decl] << [arg_len, Int32]
-                      unless ::JavaScript::JS_HELPERS[{:read, info[:type]}]
-                        name = "__helper_#{::JavaScript::JS_HELPERS.size+1}"
+                      unless ::JS::HELPERS[{:read, info[:type]}]
+                        name = "__helper_#{::JS::HELPERS.size+1}"
                         body = "  function #{name.id}(pos, len) { // read String\n"
                         body += "    return decoder.decode(new Uint8Array(mem.buffer, pos, len));\n"
                         body += "  }"
-                        ::JavaScript::JS_HELPERS[{:read, info[:type]}] = [name, body, false]
+                        ::JS::HELPERS[{:read, info[:type]}] = [name, body, false]
                       end
                       required_helpers << {:read, info[:type]}
-                      info[:js_body] += "#{::JavaScript::JS_HELPERS[{:read, info[:type]}][0].id}(#{arg_buf}, #{arg_len})"
+                      info[:js_body] += "#{::JS::HELPERS[{:read, info[:type]}][0].id}(#{arg_buf}, #{arg_len})"
                       tmp_var = "__var#{var_counter += 1}"
                       info[:cr_prepare] += "#{tmp_var.id} = (#{info[:value].id})\n"
                       info[:cr_args] << "#{tmp_var.id}.to_unsafe.address.to_u32".id
@@ -164,8 +164,8 @@ module JavaScript
                       info[:cr_prepare] += "end\n"
                       info[:cr_args] << "#{buf_var.id}.address.to_u32".id
                       info[:cr_args] << size_var.id
-                      unless ::JavaScript::JS_HELPERS[{:read, info[:type]}]
-                        name = "__helper_#{::JavaScript::JS_HELPERS.size+1}"
+                      unless ::JS::HELPERS[{:read, info[:type]}]
+                        name = "__helper_#{::JS::HELPERS.size+1}"
                         body = "  function #{name.id}(buf, size) { // read #{info[:type]}\n"
                         body += "    return Array.from({length: size}, () => {\n"
                         info[:base_type][:fun_args_decl].each_with_index do |(var, type), idx|
@@ -175,10 +175,10 @@ module JavaScript
                         body += "      return #{info[:base_type][:js_body].id};\n"
                         body += "    });\n"
                         body += "  }"
-                        ::JavaScript::JS_HELPERS[{:read, info[:type]}] = [name, body, false]
+                        ::JS::HELPERS[{:read, info[:type]}] = [name, body, false]
                       end
                       required_helpers << {:read, info[:type]}
-                      info[:js_body] += "#{::JavaScript::JS_HELPERS[{:read, info[:type]}][0].id}(#{arg_buf}, #{arg_len})"
+                      info[:js_body] += "#{::JS::HELPERS[{:read, info[:type]}][0].id}(#{arg_buf}, #{arg_len})"
                     end
                   end
 
@@ -198,7 +198,7 @@ module JavaScript
               return_type = method.return_type ? method.return_type.is_a?(Self) ? @type : method.return_type.resolve : Nil
               if return_type == Nil
                 fun_ret = "Void".id
-              elsif return_type < ::JavaScript::Reference
+              elsif return_type < ::JS::Reference
                 fun_ret = "Int32".id
                 js_body = "return __make_ref((() => { #{js_body.id} })());"
               elsif [Int8, Int16, Int32, UInt8, UInt16, UInt32].includes? return_type
@@ -208,8 +208,8 @@ module JavaScript
                 js_body = "return (() => { #{js_body.id} })() ? 1 : 0;"
               elsif return_type == ::String
                 fun_ret = "Void*".id
-                unless ::JavaScript::JS_HELPERS[{:write, return_type}]
-                  name = "__helper_#{::JavaScript::JS_HELPERS.size+1}"
+                unless ::JS::HELPERS[{:write, return_type}]
+                  name = "__helper_#{::JS::HELPERS.size+1}"
                   body = "  function #{name.id}(str) { // write String\n"
                   body += "    const data = encoder.encode(str);\n"
                   body += "    const ptr = malloc_atomic(13 + data.byteLength);\n"
@@ -222,17 +222,17 @@ module JavaScript
                   body += "    mem.setUint8(ptr + 12 + data.byteLength, 0);\n"
                   body += "    return ptr;\n"
                   body += "  }"
-                  ::JavaScript::JS_HELPERS[{:write, return_type}] = [name, body, false]
+                  ::JS::HELPERS[{:write, return_type}] = [name, body, false]
                 end
                 required_helpers << {:write, return_type}
-                js_body =  "return #{::JavaScript::JS_HELPERS[{:write, return_type}][0].id}((() => { #{js_body.id} })());"
+                js_body =  "return #{::JS::HELPERS[{:write, return_type}][0].id}((() => { #{js_body.id} })());"
               else
                 method.return_type.raise "Can't handle type '#{return_type}' as a JavaScript return type."
               end
 
               pretty_name = "#{@type.id}#{method.receiver ? ".".id : "#".id}#{method.name.id}"
               js_code = "#{fun_name}(#{js_args.join(", ").id}) { // #{pretty_name.id} \n#{js_prepare.id} #{js_body.id} }"
-              ::JavaScript::JS_FUNCTIONS << [fun_name, fun_args_decl, fun_ret, js_code, false, required_helpers]
+              ::JS::FUNCTIONS << [fun_name, fun_args_decl, fun_ret, js_code, false, required_helpers]
             %}
             def \{{ method.receiver ? "#{method.receiver.id}.".id : "".id }}\{{ method.name }}(\{{
               *method.args.map_with_index do |arg, index|
@@ -247,24 +247,24 @@ module JavaScript
             }}) : \{{method.return_type || Nil}}
               \\{%
                 fun_name = \{{fun_name.stringify}}
-                func = ::JavaScript::JS_FUNCTIONS.find {|x| x[0] == fun_name }
+                func = ::JS::FUNCTIONS.find {|x| x[0] == fun_name }
                 func[4] = true
                 func[5].each do |helper_id|
-                  ::JavaScript::JS_HELPERS[helper_id][2] = true
+                  ::JS::HELPERS[helper_id][2] = true
                 end
               %}
 
               \{{ cr_prepare.id }}
 
               \{% if [Int8, Int16, Int32, UInt8, UInt16, UInt32, Nil].includes? return_type %}
-                ::LibJavaScript.\{{ fun_name }}(\{{*cr_args}})
-              \{% elsif return_type < ::JavaScript::Reference %}
-                ref = ::LibJavaScript.\{{ fun_name }}(\{{*cr_args}})
-                \{{return_type}}.new(::JavaScript::Reference::ReferenceIndex.new(ref))
+                ::LibJS.\{{ fun_name }}(\{{*cr_args}})
+              \{% elsif return_type < ::JS::Reference %}
+                ref = ::LibJS.\{{ fun_name }}(\{{*cr_args}})
+                \{{return_type}}.new(::JS::Reference::ReferenceIndex.new(ref))
               \{% elsif return_type == ::String %}
-                ::LibJavaScript.\{{ fun_name }}(\{{*cr_args}}).as(::String)
+                ::LibJS.\{{ fun_name }}(\{{*cr_args}}).as(::String)
               \{% elsif return_type == Bool %}
-                ::LibJavaScript.\{{ fun_name }}(\{{*cr_args}}) == 1
+                ::LibJS.\{{ fun_name }}(\{{*cr_args}}) == 1
               \{% end %}
             end
           \{% end %}
@@ -277,9 +277,11 @@ module JavaScript
     include ExpandMethods
 
     macro inherited
-      include ::JavaScript::ExpandMethods
+      include ::JS::ExpandMethods
     end
   end
+
+  include ::JS::ExpandMethods
 end
 
 private def generate_output_js_file
@@ -313,7 +315,7 @@ private def generate_output_js_file
 
     END
 
-    ::JavaScript::JS_HELPERS.values.each do |helper|
+    ::JS::HELPERS.values.each do |helper|
       js += "\n#{helper[1].id}\n" if helper[2]
     end
 
@@ -324,7 +326,7 @@ private def generate_output_js_file
 
     END
 
-    ::JavaScript::JS_FUNCTIONS.each do |func|
+    ::JS::FUNCTIONS.each do |func|
       js += "      #{func[3].id},\n" if func[4]
     end
 
@@ -465,8 +467,8 @@ macro finished
   macro finished
     generate_output_js_file
 
-    lib LibJavaScript
-      \{% for func in JavaScript::JS_FUNCTIONS %}
+    lib LibJS
+      \{% for func in ::JS::FUNCTIONS %}
         \{{ "fun #{func[0]}(#{func[1].map { |(arg, type)| "#{arg} : #{type}".id }.join(", ").id}) : #{func[2]}".id }}
       \{% end %}
     end

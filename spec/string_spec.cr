@@ -1,5 +1,3 @@
-require "web"
-
 private module Test
   include JavaScript::ExpandMethods
 

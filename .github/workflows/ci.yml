@@ -13,7 +13,7 @@ jobs:
       - uses: denoland/setup-deno@v1
       - run: shards install
       - run: crystal tool format src --check
-      - run: |
-          crystal --version
+      - name: crystal spec
+        run: |
           sudo ln -s $(which wasm-ld-14 || which wasm-ld-13 || which wasm-ld-12 || which wasm-ld-11 || which wasm-ld-10) /usr/bin/wasm-ld
           ./spec.sh

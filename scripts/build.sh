@@ -70,23 +70,14 @@ fi
 if ! "$CRYSTAL" --version &>/dev/null
 then
   rm -rf "$SCRIPT_DIR"/crystal
-  git clone https://github.com/crystal-lang/crystal.git --single-branch "$SCRIPT_DIR"/crystal
+  git clone https://github.com/crystal-lang/crystal.git --single-branch --branch 1.4.0 "$SCRIPT_DIR"/crystal
   make -C "$SCRIPT_DIR"/crystal
 fi
 
 if [ ! -f "$SCRIPT_DIR"/wasm32-wasi/libc.a ]
 then
-  curl -L https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-14/wasi-sysroot-14.0.tar.gz | tar -C "$SCRIPT_DIR" -xz wasi-sysroot/lib/wasm32-wasi --strip-components=2
-fi
-
-if [ ! -f "$SCRIPT_DIR"/wasm32-wasi/libclang_rt.builtins-wasm32.a ]
-then
-  curl -L https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-14/libclang_rt.builtins-wasm32-wasi-14.0.tar.gz | tar -C "$SCRIPT_DIR"/wasm32-wasi -xz lib/wasi --strip-components=2
-fi
-
-if [ ! -f "$SCRIPT_DIR"/wasm32-wasi/libpcre.a ]
-then
-  curl -L https://github.com/lbguilherme/crystal/files/7791111/libpcre-8.45.tar.gz | tar -C "$SCRIPT_DIR"/wasm32-wasi -xz libpcre.a
+  mkdir -p "$SCRIPT_DIR"/wasm32-wasi
+  curl -L https://github.com/lbguilherme/wasm-libs/releases/download/0.0.1/wasm32-wasi-libs.tar.gz | tar -C "$SCRIPT_DIR"/wasm32-wasi -xz
 fi
 
 WORK_DIR=$(mktemp -d)
@@ -96,16 +87,18 @@ function cleanup {
 }
 
 trap cleanup EXIT
-export JAVASCRIPT_OUTPUT_FILE="${OUTPUT_FILE%.wasm}.js"
-"$CRYSTAL" build "$INPUT_FILE" -o "$WORK_DIR/obj" $CRYSTAL_OPTS --cross-compile --target wasm32-unknown-wasi
 
-LINK_ARGS="-L "$SCRIPT_DIR"/wasm32-wasi -lc -lclang_rt.builtins-wasm32 -lpcre --import-undefined --no-entry --export __original_main --export __js_bridge_malloc_atomic --export __js_bridge_malloc --export __js_bridge_get_type_id"
+export WASM_OUTPUT_FILE="$OUTPUT_FILE"
+export JAVASCRIPT_OUTPUT_FILE="${OUTPUT_FILE%.wasm}.js"
+export CRYSTAL_LIBRARY_PATH="$SCRIPT_DIR"/wasm32-wasi
+LINK_ARGS="-lclang_rt.builtins-wasm32 --import-undefined --no-entry --export __js_bridge_initialize --export __crystal_malloc_atomic --export __crystal_malloc --export __js_bridge_get_type_id"
 
 if [ -z "$RELEASE_MODE" ]
 then
-  wasm-ld "$WORK_DIR/obj.wasm" -o $OUTPUT_FILE $LINK_ARGS
+  "$CRYSTAL" build "$INPUT_FILE" -o $OUTPUT_FILE $CRYSTAL_OPTS --target wasm32-wasi --link-flags "$LINK_ARGS"
 else
-  wasm-ld "$WORK_DIR/obj.wasm" -o "$WORK_DIR/linked.wasm" --strip-all --compress-relocations $LINK_ARGS
+  LINK_ARGS="$LINK_ARGS --strip-all --compress-relocations"
+  "$CRYSTAL" build "$INPUT_FILE" -o "$WORK_DIR/linked.wasm" $CRYSTAL_OPTS --target wasm32-wasi --link-flags "$LINK_ARGS"
   wasm-opt "$WORK_DIR/linked.wasm" -o $OUTPUT_FILE -Oz --converge
   uglifyjs "$JAVASCRIPT_OUTPUT_FILE" --compress --mangle -o "$WORK_DIR/opt.js"
   mv "$WORK_DIR/opt.js" "$JAVASCRIPT_OUTPUT_FILE"

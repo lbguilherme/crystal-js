@@ -16,7 +16,13 @@ This is an early proof of concept. It demonstrates that it is possible to develo
 
 2. Run `shards install`
 
-3. Build your project with `lib/web/scripts/build.sh src/main.cr`
+3. Build your project with `lib/web/scripts/build.sh src/main.cr` Use the `--release` flag for an optimized build. This will produce two files: a `main.wasm` and a `main.js`.
+
+You can run your project:
+
+- with Deno: `deno run --allow-read main.js`;
+- with Node.js: `node main.js`;
+- on the Web: `<script defer src="main.js"></script>`
 
 See [crystal-web-demo](https://github.com/lbguilherme/crystal-web-demo) for an example project.
 
@@ -95,80 +101,6 @@ p obj.size # => 4
 ```
 
 Only the methods that are actually called will be generated in the output `web.js` file, thus it is fine to define usused methods.
-
-## Building your project
-
-You can use `shards install` and then build with `lib/web/scripts/build.sh src/main.cr`. Use the `--release` flag for an optimized build.
-
-Alternatively, you can use the following steps to do the same thing manually:
-
-1. Build the Crystal compiler from source.
-
-    ```sh
-    git clone https://github.com/crystal-lang/crystal.git crystal-wasm
-    make -C crystal-wasm
-    ```
-
-2. Build your code with this compiler, targetting:
-
-    ```sh
-    crystal-wasm/bin/crystal build demo.cr --cross-compile --target wasm32-unknown-wasi
-    ```
-
-    This will produce two files: a `demo.wasm` and a `web.js`.
-
-3. Grab some prebuilt dependencies:
-
-    - libc: https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-14/wasi-sysroot-14.0.tar.gz
-    - compiler_rt: https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-14/libclang_rt.builtins-wasm32-wasi-14.0.tar.gz
-    - libpcre: https://github.com/lbguilherme/crystal/files/7791111/libpcre-8.45.tar.gz
-
-4. Link your final WebAssembly binary:
-
-    ```sh
-    wasm-ld demo.wasm -o demo-final.wasm libc.a libclang_rt.builtins-wasm32.a libpcre.a --import-undefined --no-entry --export __original_main --export __js_bridge_malloc_atomic --export __js_bridge_malloc --export __js_bridge_get_type_id
-    ```
-
-    If you don't have `wasm-ld`, install the "lld" or "llvm-lld" packages. https://lld.llvm.org/WebAssembly.html.
-
-5. Create a HTML file:
-
-    ```html
-    <script src="web.js"></script>
-    <script>runCrystalApp("demo-final.wasm")</script>
-    ```
-
-6. Start a WebServer:
-
-    ```sh
-    python3 -mhttp.server
-    ```
-
-7. Open your browser at http://localhost:8000 and enjoy.
-
-### Creating an optimized build
-
-The previous steps create an unoptimized debug build. To optimize it (for speed/size) you need:
-
-1. Compile in release mode:
-
-    ```sh
-    crystal-wasm/bin/crystal build --release demo.cr --cross-compile --target wasm32-unknown-wasi
-    ```
-
-2. Link removing debug symbols and compressing sections:
-
-    ```sh
-    wasm-ld demo.wasm -o demo-final.wasm libc.a libclang_rt.builtins-wasm32.a libpcre.a --import-undefined --no-entry --export __crystal_main --strip-all --compress-relocations
-    ```
-
-3. Optimize with `wasm-opt`. Install it from Binaryen (https://github.com/WebAssembly/binaryen):
-
-    ```sh
-    wasm-opt demo-final.wasm -o demo-opt.wasm -O3 --converge
-    ```
-
-4. Use `demo-opt.wasm` instead of `demo-final.wasm`. It will work the same, but in case of errors, no useful stacktrace will be printed.
 
 ## How to contribute?
 

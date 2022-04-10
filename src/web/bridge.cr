@@ -12,15 +12,15 @@ module JavaScript
         \{% for method in @type.methods + @type.class.methods %}
           \{% if method.annotation(::JavaScript::Method) %}
             \{%
-              pieces = if method.body.class_name == "StringLiteral"
+              pieces = if method.body.is_a?(StringLiteral)
                 [method.body]
-              elsif method.body.class_name == "StringInterpolation"
+              elsif method.body.is_a?(StringInterpolation)
                 method.body.expressions
               else
                 method.raise "The body of the method '#{method.name}' must be a single string of JavaScript code."
               end
 
-              if method.receiver && (method.receiver.class_name != "Var" || method.receiver.id != "self")
+              if method.receiver && (!method.receiver.is_a?(Var) || method.receiver.id != "self")
                 method.raise "If present, the method receiver can't be anything other than 'self'."
               end
 
@@ -58,16 +58,16 @@ module JavaScript
                 if literal
                   js_body += piece
                 else
-                  type = if piece.class_name == "Var" && piece.id == "self"
+                  type = if piece.is_a?(Var) && piece.id == "self"
                     @type
-                  elsif piece.class_name == "Cast"
+                  elsif piece.is_a?(Cast)
                     piece.to.resolve
-                  elsif piece.class_name == "StringLiteral"
+                  elsif piece.is_a?(StringLiteral)
                     String
-                  elsif piece.class_name == "Var" && method.args.find(&.name.id.== piece.id) && method.args.find(&.internal_name.id.== piece.id).restriction
+                  elsif piece.is_a?(Var) && method.args.find(&.name.id.== piece.id) && method.args.find(&.internal_name.id.== piece.id).restriction
                     index = method.args.map_with_index {|arg, idx| [arg, idx] }.find(&.[0].internal_name.id.== piece.id)[1]
                     arg_type = method.args[index].restriction
-                    arg_type = arg_type.class_name == "Self" ? @type : arg_type.resolve
+                    arg_type = arg_type.is_a?(Self) ? @type : arg_type.resolve
                     method.splat_index == index ? parse_type("Enumerable(#{arg_type.id})").resolve : arg_type
                   else
                     piece.raise "Can't infer the type of this JavaScript argument: '#{piece.id}' (#{piece.class_name.id})"
@@ -195,7 +195,7 @@ module JavaScript
 
               js_body += "\n"
 
-              return_type = method.return_type ? method.return_type.class_name == "Self" ? @type : method.return_type.resolve : Nil
+              return_type = method.return_type ? method.return_type.is_a?(Self) ? @type : method.return_type.resolve : Nil
               if return_type == Nil
                 fun_ret = "Void".id
               elsif return_type < ::JavaScript::Reference
@@ -230,7 +230,8 @@ module JavaScript
                 method.return_type.raise "Can't handle type '#{return_type}' as a JavaScript return type."
               end
 
-              js_code = "#{fun_name}(#{js_args.join(", ").id}) { #{js_prepare.id} #{js_body.id} }"
+              pretty_name = "#{@type.id}#{method.receiver ? ".".id : "#".id}#{method.name.id}"
+              js_code = "#{fun_name}(#{js_args.join(", ").id}) { // #{pretty_name.id} \n#{js_prepare.id} #{js_body.id} }"
               ::JavaScript::JS_FUNCTIONS << [fun_name, fun_args_decl, fun_ret, js_code, false, required_helpers]
             %}
             def \{{ method.receiver ? "#{method.receiver.id}.".id : "".id }}\{{ method.name }}(\{{
@@ -239,8 +240,8 @@ module JavaScript
                   (index == method.splat_index ? "*" : "") +
                   "#{arg.name}" +
                   (arg.name != arg.internal_name ? " #{arg.internal_name}" : "") +
-                  (arg.restriction.class_name == "Nop" ? "" : " : #{arg.restriction}") +
-                  (arg.default_value.class_name == "Nop" ? "" : " = #{arg.default_value}")
+                  (arg.restriction.is_a?(Nop) ? "" : " : #{arg.restriction}") +
+                  (arg.default_value.is_a?(Nop) ? "" : " = #{arg.default_value}")
                 ).id
               end
             }}) : \{{method.return_type || Nil}}
@@ -284,7 +285,11 @@ end
 private def generate_output_js_file
   {%
     js = <<-END
-    async function runCrystalApp(wasmHref) {
+    const wasmSource = #{env("WASM_OUTPUT_FILE")};
+    const isDenoRuntime = !!globalThis.Deno;
+    const isNodeRuntime = !!globalThis.process;
+
+    async function runCrystalApp() {
       const encoder = new TextEncoder();
       const decoder = new TextDecoder();
       const heap = [];
@@ -382,10 +387,11 @@ private def generate_output_js_file
               const buf = mem.getUint32(iovs + i * 8, true);
               const len = mem.getUint32(iovs + i * 8 + 4, true);
               bytes_written += len;
-              if (globalThis.Deno) {
+              if (isDenoRuntime) {
                 Deno.writeAllSync(fd === 1 ? Deno.stdout : Deno.stderr, new Uint8Array(mem.buffer, buf, len));
-              } else if (globalThis.process) {
-                (fd === 1 ? process.stdout.write : process.stderr.write)(new Uint8Array(mem.buffer, buf, len));
+              } else if (isNodeRuntime) {
+                const stream = fd === 1 ? process.stdout : process.stderr;
+                stream.write(new Uint8Array(mem.buffer, buf, len));
               } else {
                 (fd === 1 ? console.log : console.error)(decoder.decode(new Uint8Array(mem.buffer, buf, len)));
               }
@@ -397,7 +403,11 @@ private def generate_output_js_file
             throw new Error("proc_exit " + exitcode);
           },
           random_get(buf, len) {
-            crypto.getRandomValues(new Uint8Array(mem.buffer, buf, len));
+            if (isNodeRuntime) {
+              require("crypto").randomBytes(len).copy(new Uint8Array(mem.buffer, buf, len));
+            } else {
+              crypto.getRandomValues(new Uint8Array(mem.buffer, buf, len));
+            }
             return 0;
           },
           environ_get() {
@@ -415,11 +425,11 @@ private def generate_output_js_file
           },
           args_sizes_get(argc_ptr, argv_buf_size_ptr) {
             mem.setUint32(argc_ptr, 1, true);
-            mem.setUint32(argv_buf_size_ptr, encoder.encode(wasmHref).length + 1, true);
+            mem.setUint32(argv_buf_size_ptr, encoder.encode(wasmSource).length + 1, true);
           },
           args_get(argv_ptr, argv_buf_ptr) {
             mem.setUint32(argv_ptr, argv_buf_ptr, true);
-            const data = encoder.encode(wasmHref);
+            const data = encoder.encode(wasmSource);
             for (let i = 0; i < data.length; i++) {
               mem.setUint8(argv_buf_ptr + i, data[i]);
             }
@@ -428,15 +438,22 @@ private def generate_output_js_file
         }
       };
 
-      const wasm = await WebAssembly.instantiateStreaming(fetch(wasmHref), imports);
+      const wasm =
+        isDenoRuntime ?
+          await WebAssembly.instantiate(await Deno.readFile(wasmSource), imports) :
+        isNodeRuntime ?
+          await WebAssembly.instantiate(await require("fs/promises").readFile(wasmSource), imports) :
+          await WebAssembly.instantiateStreaming(fetch(wasmSource), imports);
       instance = wasm.instance;
       instance.exports.memory.grow(1);
       mem = new DataView(instance.exports.memory.buffer);
-      malloc_atomic = instance.exports.__js_bridge_malloc_atomic;
-      malloc = instance.exports.__js_bridge_malloc;
+      malloc_atomic = instance.exports.__crystal_malloc_atomic;
+      malloc = instance.exports.__crystal_malloc;
       string_type_id = instance.exports.__js_bridge_get_type_id(0);
-      instance.exports.__original_main();
+      instance.exports.__js_bridge_initialize();
     }
+
+    runCrystalApp();
 
     END
 
@@ -456,12 +473,16 @@ macro finished
   end
 end
 
-fun __js_bridge_malloc_atomic(size : UInt32) : Void*
-  GC.malloc_atomic(size)
+lib LibC
+  fun __wasm_call_ctors
+  fun __wasm_call_dtors
+  fun __original_main : Int32
 end
 
-fun __js_bridge_malloc(size : UInt32) : Void*
-  GC.malloc(size)
+fun __js_bridge_initialize
+  LibC.__wasm_call_ctors
+  status = LibC.__original_main
+  LibWasi.proc_exit(status) if status != 0
 end
 
 fun __js_bridge_get_type_id(type : Int32) : Int32

@@ -1,5 +1,6 @@
 name: web
 version: 0.1.0
+license: MIT
 
 authors:
   - Guilherme Bernal <guilherme@cubos.io>
@@ -7,6 +8,4 @@ authors:
 crystalline:
   main: spec/all.cr
 
-crystal: 1.3.2
-
-license: MIT
+crystal: ">= 1.4.0"

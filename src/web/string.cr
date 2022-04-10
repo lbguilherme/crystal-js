@@ -1,4 +1,4 @@
-require "../reference"
+require "./reference"
 
 module JavaScript
   class String < Reference

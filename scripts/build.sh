@@ -2,7 +2,6 @@
 set -e
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-CRYSTAL="$SCRIPT_DIR"/crystal/bin/crystal
 CRYSTAL_OPTS=""
 
 POSITIONAL_ARGS=()
@@ -67,11 +66,19 @@ then
   exit 1
 fi
 
-if ! "$CRYSTAL" --version &>/dev/null
+echo > "$SCRIPT_DIR"/empty.cr
+
+if crystal build --target wasm32-wasi --no-codegen "$SCRIPT_DIR"/empty.cr &>/dev/null
 then
-  rm -rf "$SCRIPT_DIR"/crystal
-  git clone https://github.com/crystal-lang/crystal.git --single-branch --branch 1.4.0 "$SCRIPT_DIR"/crystal
-  make -C "$SCRIPT_DIR"/crystal
+  CRYSTAL=crystal
+else
+  CRYSTAL="$SCRIPT_DIR"/crystal/bin/crystal
+  if ! "$CRYSTAL" --version &>/dev/null
+  then
+    rm -rf "$SCRIPT_DIR"/crystal
+    git clone https://github.com/crystal-lang/crystal.git --single-branch --branch 1.4.0 "$SCRIPT_DIR"/crystal
+    make -C "$SCRIPT_DIR"/crystal
+  fi
 fi
 
 if [ ! -f "$SCRIPT_DIR"/wasm32-wasi/libc.a ]

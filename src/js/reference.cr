@@ -48,14 +48,20 @@ module JS
 
     macro js_method(call, ret = Nil)
       @[::JS::Method]
-      def {{call.name.stringify.underscore.id}}({{*call.args}}) : {{ret}}
+      def {{ call.receiver ? "#{call.receiver.id}.".id : "".id }}{{call.name.stringify.underscore.id}}({{*call.args}}) : {{ret}}
         <<-js
-          return #{self}.{{call.name.id}}({{*call.args.map { |arg| "#{arg.class_name == "Splat" ? "...".id : "".id}\#{#{arg.class_name == "Splat" ? arg.exp.var : arg.var}}".id }}});
+          return {{
+            call.receiver.id == "self" ? "\#{#{@type}}".id :
+            call.receiver ? raise("The receiver must be 'self'") :
+            "\#{self}".id
+          }}.{{call.name.id}}({{*call.args.map { |arg| "#{arg.class_name == "Splat" ? "...".id : "".id}\#{#{arg.class_name == "Splat" ? arg.exp.var : arg.var}}".id }}});
         js
       end
     end
 
     macro inherited
+      private JS_CONSTRUCTOR = {{@type.stringify.split("::").last}};
+
       @[JS::Method]
       def dup : self
         <<-js

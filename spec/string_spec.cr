@@ -18,10 +18,12 @@ describe "string" do
     str = JS::String.new("Hello!")
     str.length.should eq 6
 
-    JS::String.new("☃★♲").code_point_at(1).should eq 9733
-    JS::String.new("☃★♲").at(1).should eq JS::String.new("★")
-    JS::String.new("☃★♲").at(1).to_crystal.should eq "★"
+    emojis = JS::String.new("☃★♲")
+    emojis.code_point_at(1).should eq 9733
+    emojis.at(1).should eq JS::String.new("★")
+    emojis.at(1).to_crystal.should eq "★"
     str.ends_with("llo!").should be_true
     str.ends_with("what").should be_false
+    JS::String.from_code_point(9731, 9733, 9842).should eq emojis
   end
 end

@@ -58,6 +58,8 @@ module JS
                 if literal
                   js_body += piece
                 else
+                  piece = piece.resolve if piece.is_a?(Path)
+
                   type = if piece.is_a?(Var) && piece.id == "self"
                     @type
                   elsif piece.is_a?(Cast)
@@ -69,6 +71,8 @@ module JS
                     arg_type = method.args[index].restriction
                     arg_type = arg_type.is_a?(Self) ? @type : arg_type.resolve
                     method.splat_index == index ? parse_type("Enumerable(#{arg_type.id})").resolve : arg_type
+                  elsif piece.is_a?(TypeNode) && piece.ancestors.includes?(::JS::Reference)
+                    Class
                   else
                     piece.raise "Can't infer the type of this JavaScript argument: '#{piece.id}' (#{piece.class_name.id})"
                   end
@@ -128,6 +132,12 @@ module JS
                       info[:cr_prepare] += "#{tmp_var.id} = (#{info[:value].id})\n"
                       info[:cr_args] << "#{tmp_var.id}.to_unsafe.address.to_u32".id
                       info[:cr_args] << "#{tmp_var.id}.bytesize".id
+                    elsif info[:type] == ::Class
+                      constructor = piece.constant("JS_CONSTRUCTOR")
+                      unless constructor
+                        piece.raise "Type '#{piece}' must have the constant 'JS_CONSTRUCTOR' defined to be used as a metaclass on a JavaScript argument."
+                      end
+                      info[:js_body] += "#{constructor.id}"
                     else
                       piece.raise "Can't handle type '#{info[:type]}' as a JavaScript argument."
                     end

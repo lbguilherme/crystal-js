@@ -71,7 +71,7 @@ module JS
                     arg_type = method.args[index].restriction
                     arg_type = arg_type.is_a?(Self) ? @type : arg_type.resolve
                     method.splat_index == index ? parse_type("Enumerable(#{arg_type.id})").resolve : arg_type
-                  elsif piece.is_a?(TypeNode) && piece.ancestors.includes?(::JS::Reference)
+                  elsif piece.is_a?(TypeNode)
                     Class
                   else
                     piece.raise "Can't infer the type of this JavaScript argument: '#{piece.id}' (#{piece.class_name.id})"

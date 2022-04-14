@@ -51,10 +51,8 @@ module JS
       def {{ call.receiver ? "#{call.receiver.id}.".id : "".id }}{{call.name.stringify.underscore.id}}({{*call.args}}) : {{ret}}
         <<-js
           return {{
-            call.receiver.id == "self" ? "\#{#{@type}}".id :
-            call.receiver ? raise("The receiver must be 'self'") :
-            "\#{self}".id
-          }}.{{call.name.id}}({{*call.args.map { |arg| "#{arg.class_name == "Splat" ? "...".id : "".id}\#{#{arg.class_name == "Splat" ? arg.exp.var : arg.var}}".id }}});
+                   call.receiver.id == "self" ? "\#{#{@type}}".id : call.receiver ? raise("The receiver must be 'self'") : "\#{self}".id
+                 }}.{{call.name.id}}({{*call.args.map { |arg| "#{arg.class_name == "Splat" ? "...".id : "".id}\#{#{arg.class_name == "Splat" ? arg.exp.var : arg.var}}".id }}});
         js
       end
     end

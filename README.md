@@ -132,7 +132,7 @@ class XMLHttpRequest < JS::Reference
     js
   end
 
-  js_getter readyState : Int32    # defines a `read_state` method.
+  js_getter readyState : Int32    # defines a `ready_state` method.
   js_getter responseText : String
   js_getter status : Int32
 

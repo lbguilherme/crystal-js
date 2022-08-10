@@ -1,8 +1,10 @@
 require "./reference"
+require "./string"
 
 module JS
   class Console < JS::Reference
     js_method log(message : String)
+    js_method log(message : ::String)
   end
 
   @@console : Console?

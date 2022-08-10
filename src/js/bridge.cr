@@ -469,7 +469,7 @@ private def generate_output_js_file
 
     END
 
-    system("printf #{js} > #{env("JAVASCRIPT_OUTPUT_FILE") || "web.js"}")
+    system("printf #{js} > #{env("JAVASCRIPT_OUTPUT_FILE") || "index.js"}")
   %}
 end
 
@@ -488,13 +488,17 @@ end
 lib LibC
   fun __wasm_call_ctors
   fun __wasm_call_dtors
-  fun __original_main : Int32
+  fun __main_void : Int32
 end
 
 fun __js_bridge_initialize
   LibC.__wasm_call_ctors
-  status = LibC.__original_main
-  LibWasi.proc_exit(status) if status != 0
+  status = LibC.__main_void
+  LibC.exit(status) if status != 0
+end
+
+fun __main_argc_argv(argc : Int32, argv : UInt8**) : Int32
+  Crystal.main(argc, argv)
 end
 
 fun __js_bridge_get_type_id(type : Int32) : Int32

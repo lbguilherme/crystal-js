@@ -66,47 +66,29 @@ then
   exit 1
 fi
 
-echo > "$SCRIPT_DIR"/empty.cr
-
-if crystal build --target wasm32-wasi --no-codegen "$SCRIPT_DIR"/empty.cr &>/dev/null
+if [ ! -f "$SCRIPT_DIR"/wasm32-wasi-libs/libc.a ]
 then
-  CRYSTAL=crystal
-else
-  CRYSTAL="$SCRIPT_DIR"/crystal/bin/crystal
-  if ! "$CRYSTAL" --version &>/dev/null
-  then
-    rm -rf "$SCRIPT_DIR"/crystal
-    git clone https://github.com/crystal-lang/crystal.git --single-branch --branch 1.4.0 "$SCRIPT_DIR"/crystal
-    make -C "$SCRIPT_DIR"/crystal
-  fi
+  mkdir -p "$SCRIPT_DIR"/wasm32-wasi-libs
+  curl -L https://github.com/lbguilherme/wasm-libs/releases/download/0.0.2/wasm32-wasi-libs.tar.gz | tar -C "$SCRIPT_DIR"/wasm32-wasi-libs -xz
 fi
-
-if [ ! -f "$SCRIPT_DIR"/wasm32-wasi/libc.a ]
-then
-  mkdir -p "$SCRIPT_DIR"/wasm32-wasi
-  curl -L https://github.com/lbguilherme/wasm-libs/releases/download/0.0.1/wasm32-wasi-libs.tar.gz | tar -C "$SCRIPT_DIR"/wasm32-wasi -xz
-fi
-
-WORK_DIR=$(mktemp -d)
-
-function cleanup {
-  rm -r $WORK_DIR
-}
-
-trap cleanup EXIT
 
 export WASM_OUTPUT_FILE="$OUTPUT_FILE"
 export JAVASCRIPT_OUTPUT_FILE="${OUTPUT_FILE%.wasm}.js"
-export CRYSTAL_LIBRARY_PATH="$SCRIPT_DIR"/wasm32-wasi
+export CRYSTAL_LIBRARY_PATH="$SCRIPT_DIR"/wasm32-wasi-libs
 LINK_ARGS="-lclang_rt.builtins-wasm32 --allow-undefined --no-entry --export __js_bridge_initialize --export __crystal_malloc_atomic --export __crystal_malloc --export __js_bridge_get_type_id"
 
 if [ -z "$RELEASE_MODE" ]
 then
-  "$CRYSTAL" build "$INPUT_FILE" -o $OUTPUT_FILE $CRYSTAL_OPTS --target wasm32-wasi --link-flags "$LINK_ARGS"
+  crystal build "$INPUT_FILE" -o $OUTPUT_FILE $CRYSTAL_OPTS --target wasm32-wasi --link-flags "$LINK_ARGS"
 else
+  WORK_DIR=$(mktemp -d)
+  function cleanup {
+    rm -rf $WORK_DIR
+  }
+  trap cleanup EXIT
   LINK_ARGS="$LINK_ARGS --strip-all --compress-relocations"
-  "$CRYSTAL" build "$INPUT_FILE" -o "$WORK_DIR/linked.wasm" $CRYSTAL_OPTS --target wasm32-wasi --link-flags "$LINK_ARGS"
-  wasm-opt "$WORK_DIR/linked.wasm" -o $OUTPUT_FILE -Oz --converge
+  crystal build "$INPUT_FILE" -o "$WORK_DIR/linked.wasm" $CRYSTAL_OPTS --target wasm32-wasi --link-flags "$LINK_ARGS"
+  wasm-opt "$WORK_DIR/linked.wasm" -o $OUTPUT_FILE -Oz --converge --all-features
   uglifyjs "$JAVASCRIPT_OUTPUT_FILE" --compress --mangle -o "$WORK_DIR/opt.js"
   mv "$WORK_DIR/opt.js" "$JAVASCRIPT_OUTPUT_FILE"
 fi

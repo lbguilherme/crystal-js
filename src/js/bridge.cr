@@ -477,7 +477,7 @@ private def generate_output_js_file
     END
 
     if target == "esm"
-    js += <<-END
+      js += <<-END
 
     export default instantiateCrystalModule;
 
@@ -487,7 +487,7 @@ private def generate_output_js_file
 
     END
     else
-    js += <<-END
+      js += <<-END
 
     if (typeof exports === "object") {
       module.exports = instantiateCrystalModule;

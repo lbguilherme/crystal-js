@@ -76,6 +76,7 @@ export CRYSTAL_JS_WASM="$OUTPUT_FILE"
 export CRYSTAL_JS_OUTPUT="${OUTPUT_FILE%.wasm}.js"
 export CRYSTAL_LIBRARY_PATH="$SCRIPT_DIR"/wasm32-wasi-libs
 LINK_ARGS="-lclang_rt.builtins-wasm32 --allow-undefined --no-entry --export __js_bridge_main --export __crystal_malloc_atomic --export __crystal_malloc --export __js_bridge_get_type_id"
+LINK_ARGS="$LINK_ARGS --export-if-defined=__export_0 --export-if-defined=__export_1 --export-if-defined=__export_2 --export-if-defined=__export_3 --export-if-defined=__export_4 --export-if-defined=__export_5"
 
 if [ -z "$RELEASE_MODE" ]
 then

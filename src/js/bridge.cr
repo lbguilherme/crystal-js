@@ -1,6 +1,8 @@
 module JS
   FUNCTIONS = [] of Nil
 
+  EXPORTS = [] of Nil
+
   HELPERS = {} of Nil => Nil
 
   annotation Method
@@ -292,6 +294,53 @@ module JS
   end
 
   include ::JS::ExpandMethods
+
+  macro export(method_def)
+    \{% raise "JS.export can only be used at the top level" unless @type.name == "main" %}
+
+    {%
+      export_index = EXPORTS.size
+      EXPORTS << [method_def.name, export_index]
+    %}
+
+    module JSExportHelpers
+      {% arg_index = 0 %}
+      {% for arg in method_def.args %}
+        @[JS::Method]
+        def self.__export_{{export_index}}_get_arg_{{arg_index}}(slot : Int32) : {{arg.restriction}}
+          <<-js
+            return heap[#{slot}][{{arg_index}}];
+          js
+        end
+        {% arg_index += 1 %}
+      {% end %}
+
+      @[JS::Method]
+      def self.__export_{{export_index}}_set_result(slot : Int32, result : {{method_def.return_type}})
+        <<-js
+          heap[#{slot}] = #{result};
+        js
+      end
+    end
+
+    {{ method_def }}
+
+    fun __export_{{export_index}}(slot : Int32)
+      {% arg_index = 0 %}
+      {% for arg in method_def.args %}
+        arg{{arg_index}} = JSExportHelpers.__export_{{export_index}}_get_arg_{{arg_index}}(slot)
+        {% arg_index += 1 %}
+      {% end %}
+
+      result = {{ method_def.name }}({{*method_def.args.map_with_index {|arg, index| "arg#{index}".id}}})
+
+      JSExportHelpers.__export_{{export_index}}_set_result(slot, result)
+    end
+  end
+end
+
+module JSExportHelpers
+  include ::JS::ExpandMethods
 end
 
 private def generate_output_js_file
@@ -300,7 +349,7 @@ private def generate_output_js_file
     target = env("CRYSTAL_JS_TARGET")
     target = "esm" if output_file.ends_with?(".mjs") && target.nil?
     target = "commonjs" if output_file.ends_with?(".cjs") && target.nil?
-    target = "esm" if target.nil?
+    target = "commonjs" if target.nil?
 
     js = <<-END
     const wasmSource = #{env("CRYSTAL_JS_WASM")};
@@ -464,14 +513,30 @@ private def generate_output_js_file
         isNodeRuntime ?
           await WebAssembly.instantiate(await nodeFsPromises.readFile(wasmSource), imports) :
           await WebAssembly.instantiateStreaming(fetch(wasmSource), imports);
-      instance.exports.memory.grow(1);
-      mem = new DataView(instance.exports.memory.buffer);
-      malloc_atomic = instance.exports.__crystal_malloc_atomic;
-      malloc = instance.exports.__crystal_malloc;
-      string_type_id = instance.exports.__js_bridge_get_type_id(0);
-      instance.exports.__js_bridge_main();
+      const { exports } = instance;
+      exports.memory.grow(1);
+      mem = new DataView(exports.memory.buffer);
+      malloc_atomic = exports.__crystal_malloc_atomic;
+      malloc = exports.__crystal_malloc;
+      string_type_id = exports.__js_bridge_get_type_id(0);
+      exports.__js_bridge_main();
 
-      return {};
+      return {
+    END
+
+    ::JS::EXPORTS.each do |export|
+      js += "
+            #{export[0].stringify}: (...args) => {
+              const slot = __make_ref(args);
+              exports.__export_#{export[1]}(slot);
+              const result = heap[slot];
+              __drop_ref(slot);
+              return result;
+            },"
+    end
+
+    js += <<-END
+      };
     }
 
     END

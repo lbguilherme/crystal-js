@@ -9,4 +9,7 @@
 # Dependencies will be locked in applications that use them
 /shard.lock
 
+examples/*/crystal.wasm
+examples/*/crystal.js
+examples/*/crystal.mjs
 scripts/wasm32-wasi-libs

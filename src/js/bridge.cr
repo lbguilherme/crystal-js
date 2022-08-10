@@ -296,21 +296,29 @@ end
 
 private def generate_output_js_file
   {%
+    output_file = env("CRYSTAL_JS_OUTPUT") || "index.js"
+    target = env("CRYSTAL_JS_TARGET")
+    target = "esm" if output_file.ends_with?(".mjs") && target.nil?
+    target = "commonjs" if output_file.ends_with?(".cjs") && target.nil?
+    target = "esm" if target.nil?
+
     js = <<-END
-    const wasmSource = #{env("WASM_OUTPUT_FILE")};
+    const wasmSource = #{env("CRYSTAL_JS_WASM")};
     const isDenoRuntime = !!globalThis.Deno;
     const isNodeRuntime = !!globalThis.process;
 
-    async function runCrystalApp() {
+    async function instantiateCrystalModule() {
       const encoder = new TextEncoder();
       const decoder = new TextDecoder();
       const heap = [];
       const free = [];
-      let instance;
       let mem;
       let malloc_atomic;
       let malloc;
       let string_type_id;
+
+      const nodeCrypto = isNodeRuntime && #{target == "esm" ? "await import(\"node:crypto\")".id : "require(\"crypto\")".id};
+      const nodeFsPromises = isNodeRuntime && #{target == "esm" ? "await import(\"node:fs/promises\")".id : "require(\"fs/promises\")".id};
 
       function __make_ref(element) {
         const index = free.length ? free.pop() : heap.length;
@@ -416,7 +424,7 @@ private def generate_output_js_file
           },
           random_get(buf, len) {
             if (isNodeRuntime) {
-              require("crypto").randomBytes(len).copy(new Uint8Array(mem.buffer, buf, len));
+              nodeCrypto.randomBytes(len).copy(new Uint8Array(mem.buffer, buf, len));
             } else {
               crypto.getRandomValues(new Uint8Array(mem.buffer, buf, len));
             }
@@ -450,26 +458,54 @@ private def generate_output_js_file
         }
       };
 
-      const wasm =
+      const { instance } =
         isDenoRuntime ?
           await WebAssembly.instantiate(await Deno.readFile(wasmSource), imports) :
         isNodeRuntime ?
-          await WebAssembly.instantiate(await require("fs/promises").readFile(wasmSource), imports) :
+          await WebAssembly.instantiate(await nodeFsPromises.readFile(wasmSource), imports) :
           await WebAssembly.instantiateStreaming(fetch(wasmSource), imports);
-      instance = wasm.instance;
       instance.exports.memory.grow(1);
       mem = new DataView(instance.exports.memory.buffer);
       malloc_atomic = instance.exports.__crystal_malloc_atomic;
       malloc = instance.exports.__crystal_malloc;
       string_type_id = instance.exports.__js_bridge_get_type_id(0);
-      instance.exports.__js_bridge_initialize();
-    }
+      instance.exports.__js_bridge_main();
 
-    runCrystalApp();
+      return {};
+    }
 
     END
 
-    system("printf #{js} > #{env("JAVASCRIPT_OUTPUT_FILE") || "index.js"}")
+    if target == "esm"
+    js += <<-END
+
+    export default instantiateCrystalModule;
+
+    if (import.meta.main || (isNodeRuntime && import.meta.url === (await import("node:url")).pathToFileURL(process.argv[1]).href)) {
+      await instantiateCrystalModule();
+    }
+
+    END
+    else
+    js += <<-END
+
+    if (typeof exports === "object") {
+      module.exports = instantiateCrystalModule;
+    } else {
+      globalThis.instantiateCrystalModule = instantiateCrystalModule;
+    }
+
+    if (isNodeRuntime && require.main === module) {
+      instantiateCrystalModule().catch(err => {
+        console.error(err);
+        process.exit(1);
+      });
+    }
+
+    END
+    end
+
+    system("printf #{js} > #{env("CRYSTAL_JS_OUTPUT") || "index.js"}")
   %}
 end
 
@@ -491,7 +527,7 @@ lib LibC
   fun __main_void : Int32
 end
 
-fun __js_bridge_initialize
+fun __js_bridge_main
   LibC.__wasm_call_ctors
   status = LibC.__main_void
   LibC.exit(status) if status != 0

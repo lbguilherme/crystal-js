@@ -72,10 +72,10 @@ then
   curl -L https://github.com/lbguilherme/wasm-libs/releases/download/0.0.2/wasm32-wasi-libs.tar.gz | tar -C "$SCRIPT_DIR"/wasm32-wasi-libs -xz
 fi
 
-export WASM_OUTPUT_FILE="$OUTPUT_FILE"
-export JAVASCRIPT_OUTPUT_FILE="${OUTPUT_FILE%.wasm}.js"
+export CRYSTAL_JS_WASM="$OUTPUT_FILE"
+export CRYSTAL_JS_OUTPUT="${OUTPUT_FILE%.wasm}.js"
 export CRYSTAL_LIBRARY_PATH="$SCRIPT_DIR"/wasm32-wasi-libs
-LINK_ARGS="-lclang_rt.builtins-wasm32 --allow-undefined --no-entry --export __js_bridge_initialize --export __crystal_malloc_atomic --export __crystal_malloc --export __js_bridge_get_type_id"
+LINK_ARGS="-lclang_rt.builtins-wasm32 --allow-undefined --no-entry --export __js_bridge_main --export __crystal_malloc_atomic --export __crystal_malloc --export __js_bridge_get_type_id"
 
 if [ -z "$RELEASE_MODE" ]
 then
@@ -89,6 +89,6 @@ else
   LINK_ARGS="$LINK_ARGS --strip-all --compress-relocations"
   crystal build "$INPUT_FILE" -o "$WORK_DIR/linked.wasm" $CRYSTAL_OPTS --target wasm32-wasi --link-flags "$LINK_ARGS"
   wasm-opt "$WORK_DIR/linked.wasm" -o $OUTPUT_FILE -Oz --converge --all-features
-  uglifyjs "$JAVASCRIPT_OUTPUT_FILE" --compress --mangle -o "$WORK_DIR/opt.js"
-  mv "$WORK_DIR/opt.js" "$JAVASCRIPT_OUTPUT_FILE"
+  uglifyjs "$CRYSTAL_JS_OUTPUT" --compress --mangle -o "$WORK_DIR/opt.js"
+  mv "$WORK_DIR/opt.js" "$CRYSTAL_JS_OUTPUT"
 fi

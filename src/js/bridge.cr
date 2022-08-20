@@ -356,9 +356,11 @@ private def generate_output_js_file
     const isDenoRuntime = !!globalThis.Deno;
     const isNodeRuntime = !!globalThis.process;
 
+    let cachedModule;
+
     async function instantiateCrystalModule() {
       const encoder = new TextEncoder();
-      const decoder = new TextDecoder();
+      const decoder = new TextDecoder("utf-8", { fatal: true });
       const heap = [];
       const free = [];
       let mem;
@@ -404,7 +406,7 @@ private def generate_output_js_file
             throw new Error("fd_close");
           },
           fd_fdstat_get(fd, buf) {
-            if (fd > 2) return 8;
+            if (fd > 2) return 8; // WASI_EBADF
             mem.setUint8(buf, 4, true); // WASI_FILETYPE_REGULAR_FILE
             mem.setUint16(buf + 2, 0, true);
             mem.setUint16(buf + 4, 0, true);
@@ -413,11 +415,11 @@ private def generate_output_js_file
             return 0;
           },
           fd_fdstat_set_flags(fd) {
-            if (fd > 2) return 8;
+            if (fd > 2) return 8; // WASI_EBADF
             throw new Error("fd_fdstat_set_flags");
           },
           fd_filestat_get(fd, buf) {
-            if (fd > 2) return 8;
+            if (fd > 2) return 8; // WASI_EBADF
             mem.setBigUint64(buf, BigInt(0), true);
             mem.setBigUint64(buf + 8, BigInt(0), true);
             mem.setUint8(buf + 16, 4, true); // WASI_FILETYPE_REGULAR_FILE
@@ -450,7 +452,7 @@ private def generate_output_js_file
             throw new Error("path_open");
           },
           fd_write(fd, iovs, length, bytes_written_ptr) {
-            if (fd < 1 || fd > 2) return 8;
+            if (fd < 1 || fd > 2) return 8; // WASI_EBADF
             let bytes_written = 0;
             for (let i = 0; i < length; i++) {
               const buf = mem.getUint32(iovs + i * 8, true);
@@ -495,12 +497,15 @@ private def generate_output_js_file
         }
       };
 
-      const { instance } =
+      const { instance, module } =
+        cachedModule ?
+          await WebAssembly.instantiate(cachedModule, imports) :
         isDenoRuntime ?
           await WebAssembly.instantiate(await Deno.readFile(wasmSource), imports) :
         isNodeRuntime ?
           await WebAssembly.instantiate(await nodeFsPromises.readFile(wasmSource), imports) :
           await WebAssembly.instantiateStreaming(fetch(wasmSource), imports);
+      cachedModule = module;
       const { exports } = instance;
       exports.memory.grow(1);
       mem = new DataView(exports.memory.buffer);

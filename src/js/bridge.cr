@@ -492,18 +492,6 @@ private def generate_output_js_file
             mem.setBigUint64(time_ptr, time, true);
             return 0;
           },
-          args_sizes_get(argc_ptr, argv_buf_size_ptr) {
-            mem.setUint32(argc_ptr, 1, true);
-            mem.setUint32(argv_buf_size_ptr, encoder.encode(wasmSource).length + 1, true);
-          },
-          args_get(argv_ptr, argv_buf_ptr) {
-            mem.setUint32(argv_ptr, argv_buf_ptr, true);
-            const data = encoder.encode(wasmSource);
-            for (let i = 0; i < data.length; i++) {
-              mem.setUint8(argv_buf_ptr + i, data[i]);
-            }
-            mem.setUint8(argv_buf_ptr + data.length, 0);
-          }
         }
       };
 
@@ -594,12 +582,9 @@ end
 
 fun __js_bridge_main
   LibC.__wasm_call_ctors
-  status = LibC.__main_void
+  argv = {% begin %} {{ env("CRYSTAL_JS_WASM") || "" }}.to_unsafe {% end %}
+  status = Crystal.main(1, pointerof(argv))
   LibC.exit(status) if status != 0
-end
-
-fun __main_argc_argv(argc : Int32, argv : UInt8**) : Int32
-  Crystal.main(argc, argv)
 end
 
 fun __js_bridge_get_type_id(type : Int32) : Int32

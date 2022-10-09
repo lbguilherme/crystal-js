@@ -3,6 +3,7 @@ set -e
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 CRYSTAL_OPTS=""
+JS_EXT=".js"
 
 POSITIONAL_ARGS=()
 
@@ -11,6 +12,10 @@ while [[ $# -gt 0 ]]; do
     --release)
       RELEASE_MODE=1
       CRYSTAL_OPTS="$CRYSTAL_OPTS --release"
+      shift
+    ;;
+    --esm)
+      JS_EXT=".mjs"
       shift
     ;;
     --error-trace)
@@ -73,10 +78,12 @@ then
 fi
 
 export CRYSTAL_JS_WASM="$OUTPUT_FILE"
-export CRYSTAL_JS_OUTPUT="${OUTPUT_FILE%.wasm}.js"
+export CRYSTAL_JS_OUTPUT="${OUTPUT_FILE%.wasm}${JS_EXT}"
 export CRYSTAL_LIBRARY_PATH="$SCRIPT_DIR"/wasm32-wasi-libs
-LINK_ARGS="-lclang_rt.builtins-wasm32 --allow-undefined --no-entry --export __js_bridge_main --export __crystal_malloc_atomic --export __crystal_malloc --export __js_bridge_get_type_id"
-LINK_ARGS="$LINK_ARGS --export-if-defined=__export_0 --export-if-defined=__export_1 --export-if-defined=__export_2 --export-if-defined=__export_3 --export-if-defined=__export_4 --export-if-defined=__export_5"
+LINK_ARGS="--allow-undefined --export __crystal_malloc_atomic --export __crystal_malloc --export __js_bridge_get_type_id"
+LINK_ARGS="$LINK_ARGS --export-if-defined=__export_0 --export-if-defined=__export_1 --export-if-defined=__export_2 --export-if-defined=__export_3 --export-if-defined=__export_4 --export-if-defined=__export_5 --export-if-defined=__export_6 --export-if-defined=__export_7 --export-if-defined=__export_8 --export-if-defined=__export_9"
+LINK_ARGS="$LINK_ARGS --export-if-defined=__export_10 --export-if-defined=__export_11 --export-if-defined=__export_12 --export-if-defined=__export_13 --export-if-defined=__export_14 --export-if-defined=__export_15 --export-if-defined=__export_16 --export-if-defined=__export_17 --export-if-defined=__export_18 --export-if-defined=__export_19"
+LINK_ARGS="$LINK_ARGS -lclang_rt.builtins-wasm32"
 
 if [ -z "$RELEASE_MODE" ]
 then

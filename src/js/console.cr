@@ -7,16 +7,12 @@ module JS
     js_method log(message : ::String)
   end
 
-  @@console : Console?
+  class_getter(console : Console) { get_console }
 
   @[JS::Method]
   private def self.get_console : Console
     <<-js
       return console;
     js
-  end
-
-  def self.console
-    @@console ||= get_console
   end
 end

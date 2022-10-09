@@ -34,14 +34,14 @@ module JS
               }
 
               js_mem_read = {
-                Int8 => "mem.getInt8($POS$)",
-                UInt8 => "mem.getUint8($POS$)",
-                Int16 => "mem.getInt16($POS$, true)",
-                UInt16 => "mem.getUint16($POS$, true)",
-                Int32 => "mem.getInt32($POS$, true)",
-                UInt32 => "mem.getUint32($POS$, true)",
-                Int64 => "mem.getBigInt64($POS$, true)",
-                UInt64 => "mem.getBigUint64($POS$, true)",
+                Int8 => "__memory.getInt8($POS$)",
+                UInt8 => "__memory.getUint8($POS$)",
+                Int16 => "__memory.getInt16($POS$, true)",
+                UInt16 => "__memory.getUint16($POS$, true)",
+                Int32 => "__memory.getInt32($POS$, true)",
+                UInt32 => "__memory.getUint32($POS$, true)",
+                Int64 => "__memory.getBigInt64($POS$, true)",
+                UInt64 => "__memory.getBigUint64($POS$, true)",
               }
 
               js_prepare = ""
@@ -95,7 +95,7 @@ module JS
                       arg = "arg#{var_counter += 1}".id
                       info[:js_args] << arg
                       info[:fun_args_decl] << [arg, Int32]
-                      info[:js_body] += "heap[#{arg}]"
+                      info[:js_body] += "__heap[#{arg}]"
                       info[:cr_args] << "#{info[:value].id}.@extern_ref.index".id
                     elsif info[:type] <= ::Enumerable
                       base_type = ([info[:type]] + info[:type].ancestors).select { |x| x <= Enumerable }.last.type_vars[0]
@@ -124,7 +124,7 @@ module JS
                       unless ::JS::HELPERS[{:read, info[:type]}]
                         name = "__helper_#{::JS::HELPERS.size+1}"
                         body = "  function #{name.id}(pos, len) { // read String\n"
-                        body += "    return decoder.decode(new Uint8Array(mem.buffer, pos, len));\n"
+                        body += "    return __utf8Decoder.decode(new Uint8Array(__memory.buffer, pos, len));\n"
                         body += "  }"
                         ::JS::HELPERS[{:read, info[:type]}] = [name, body, false]
                       end
@@ -223,15 +223,15 @@ module JS
                 unless ::JS::HELPERS[{:write, return_type}]
                   name = "__helper_#{::JS::HELPERS.size+1}"
                   body = "  function #{name.id}(str) { // write String\n"
-                  body += "    const data = encoder.encode(str);\n"
-                  body += "    const ptr = malloc_atomic(13 + data.byteLength);\n"
-                  body += "    mem.setUint32(ptr, string_type_id, true);\n"
-                  body += "    mem.setUint32(ptr + 4, data.byteLength, true);\n"
-                  body += "    mem.setUint32(ptr + 8, str.length, true);\n"
+                  body += "    const data = __utf8Encoder.encode(str);\n"
+                  body += "    const ptr = __exports.__crystal_malloc_atomic(13 + data.byteLength);\n"
+                  body += "    __memory.setUint32(ptr, __string_type_id, true);\n"
+                  body += "    __memory.setUint32(ptr + 4, data.byteLength, true);\n"
+                  body += "    __memory.setUint32(ptr + 8, str.length, true);\n"
                   body += "    for (let i = 0; i < data.byteLength; i++) {\n"
-                  body += "      mem.setUint8(ptr + 12 + i, data[i]);\n"
+                  body += "      __memory.setUint8(ptr + 12 + i, data[i]);\n"
                   body += "    }\n"
-                  body += "    mem.setUint8(ptr + 12 + data.byteLength, 0);\n"
+                  body += "    __memory.setUint8(ptr + 12 + data.byteLength, 0);\n"
                   body += "    return ptr;\n"
                   body += "  }"
                   ::JS::HELPERS[{:write, return_type}] = [name, body, false]
@@ -309,7 +309,7 @@ module JS
         @[JS::Method]
         def self.__export_{{export_index}}_get_arg_{{arg_index}}(slot : Int32) : {{arg.restriction}}
           <<-js
-            return heap[#{slot}][{{arg_index}}];
+            return __heap[#{slot}][{{arg_index}}];
           js
         end
         {% arg_index += 1 %}
@@ -318,7 +318,7 @@ module JS
       @[JS::Method]
       def self.__export_{{export_index}}_set_result(slot : Int32, result : {{method_def.return_type}})
         <<-js
-          heap[#{slot}] = #{result};
+          __heap[#{slot}] = #{result};
         js
       end
     end
@@ -332,7 +332,7 @@ module JS
         {% arg_index += 1 %}
       {% end %}
 
-      result = {{ method_def.name }}({{*method_def.args.map_with_index {|arg, index| "arg#{index}".id}}})
+      result = {{ method_def.name }}({{*method_def.args.map_with_index { |arg, index| "arg#{index}".id }}})
 
       JSExportHelpers.__export_{{export_index}}_set_result(slot, result)
     end
@@ -356,31 +356,24 @@ private def generate_output_js_file
     const isDenoRuntime = !!globalThis.Deno;
     const isNodeRuntime = !!globalThis.process;
 
-    let cachedModule;
+    const __utf8Encoder = new TextEncoder();
+    const __utf8Decoder = new TextDecoder("utf-8", { fatal: true });
+    const __heap = [];
+    const __free = [];
+    let __memory;
+    let __string_type_id;
+    let __exports;
 
-    async function instantiateCrystalModule() {
-      const encoder = new TextEncoder();
-      const decoder = new TextDecoder("utf-8", { fatal: true });
-      const heap = [];
-      const free = [];
-      let mem;
-      let malloc_atomic;
-      let malloc;
-      let string_type_id;
+    function __make_ref(element) {
+      const index = __free.length ? __free.pop() : __heap.length;
+      __heap[index] = element;
+      return index;
+    }
 
-      const nodeCrypto = isNodeRuntime && #{target == "esm" ? "await import(\"node:crypto\")".id : "require(\"crypto\")".id};
-      const nodeFsPromises = isNodeRuntime && #{target == "esm" ? "await import(\"node:fs/promises\")".id : "require(\"fs/promises\")".id};
-
-      function __make_ref(element) {
-        const index = free.length ? free.pop() : heap.length;
-        heap[index] = element;
-        return index;
-      }
-
-      function __drop_ref(index) {
-        heap[index] = undefined;
-        free.push(index);
-      }
+    function __drop_ref(index) {
+      __heap[index] = undefined;
+      __free.push(index);
+    }
 
     END
 
@@ -389,6 +382,12 @@ private def generate_output_js_file
     end
 
     js += <<-END
+
+    async function init() {
+      if (__exports) return;
+
+      const nodeCrypto = isNodeRuntime && #{target == "esm" ? "await import(\"node:crypto\")".id : "require(\"crypto\")".id};
+      const nodeFsPromises = isNodeRuntime && #{target == "esm" ? "await import(\"node:fs/promises\")".id : "require(\"fs/promises\")".id};
 
       const imports = {
         env: {
@@ -407,11 +406,11 @@ private def generate_output_js_file
           },
           fd_fdstat_get(fd, buf) {
             if (fd > 2) return 8; // WASI_EBADF
-            mem.setUint8(buf, 4, true); // WASI_FILETYPE_REGULAR_FILE
-            mem.setUint16(buf + 2, 0, true);
-            mem.setUint16(buf + 4, 0, true);
-            mem.setBigUint64(buf + 8, BigInt(0), true);
-            mem.setBigUint64(buf + 16, BigInt(0), true);
+            __memory.setUint8(buf, 4, true); // WASI_FILETYPE_REGULAR_FILE
+            __memory.setUint16(buf + 2, 0, true);
+            __memory.setUint16(buf + 4, 0, true);
+            __memory.setBigUint64(buf + 8, BigInt(0), true);
+            __memory.setBigUint64(buf + 16, BigInt(0), true);
             return 0;
           },
           fd_fdstat_set_flags(fd) {
@@ -420,14 +419,14 @@ private def generate_output_js_file
           },
           fd_filestat_get(fd, buf) {
             if (fd > 2) return 8; // WASI_EBADF
-            mem.setBigUint64(buf, BigInt(0), true);
-            mem.setBigUint64(buf + 8, BigInt(0), true);
-            mem.setUint8(buf + 16, 4, true); // WASI_FILETYPE_REGULAR_FILE
-            mem.setBigUint64(buf + 24, BigInt(1), true);
-            mem.setBigUint64(buf + 32, BigInt(0), true);
-            mem.setBigUint64(buf + 40, BigInt(0), true);
-            mem.setBigUint64(buf + 48, BigInt(0), true);
-            mem.setBigUint64(buf + 56, BigInt(0), true);
+            __memory.setBigUint64(buf, BigInt(0), true);
+            __memory.setBigUint64(buf + 8, BigInt(0), true);
+            __memory.setUint8(buf + 16, 4, true); // WASI_FILETYPE_REGULAR_FILE
+            __memory.setBigUint64(buf + 24, BigInt(1), true);
+            __memory.setBigUint64(buf + 32, BigInt(0), true);
+            __memory.setBigUint64(buf + 40, BigInt(0), true);
+            __memory.setBigUint64(buf + 48, BigInt(0), true);
+            __memory.setBigUint64(buf + 56, BigInt(0), true);
             return 0;
           },
           fd_prestat_get() {
@@ -455,19 +454,19 @@ private def generate_output_js_file
             if (fd < 1 || fd > 2) return 8; // WASI_EBADF
             let bytes_written = 0;
             for (let i = 0; i < length; i++) {
-              const buf = mem.getUint32(iovs + i * 8, true);
-              const len = mem.getUint32(iovs + i * 8 + 4, true);
+              const buf = __memory.getUint32(iovs + i * 8, true);
+              const len = __memory.getUint32(iovs + i * 8 + 4, true);
               bytes_written += len;
               if (isDenoRuntime) {
-                Deno.writeAllSync(fd === 1 ? Deno.stdout : Deno.stderr, new Uint8Array(mem.buffer, buf, len));
+                Deno.writeAllSync(fd === 1 ? Deno.stdout : Deno.stderr, new Uint8Array(__memory.buffer, buf, len));
               } else if (isNodeRuntime) {
                 const stream = fd === 1 ? process.stdout : process.stderr;
-                stream.write(new Uint8Array(mem.buffer, buf, len));
+                stream.write(new Uint8Array(__memory.buffer, buf, len));
               } else {
-                (fd === 1 ? console.log : console.error)(decoder.decode(new Uint8Array(mem.buffer, buf, len)));
+                (fd === 1 ? console.log : console.error)(__utf8Decoder.decode(new Uint8Array(__memory.buffer, buf, len)));
               }
             }
-            mem.setUint32(bytes_written_ptr, bytes_written, true);
+            __memory.setUint32(bytes_written_ptr, bytes_written, true);
             return 0;
           },
           proc_exit(exitcode) {
@@ -475,9 +474,9 @@ private def generate_output_js_file
           },
           random_get(buf, len) {
             if (isNodeRuntime) {
-              nodeCrypto.randomBytes(len).copy(new Uint8Array(mem.buffer, buf, len));
+              nodeCrypto.randomBytes(len).copy(new Uint8Array(__memory.buffer, buf, len));
             } else {
-              crypto.getRandomValues(new Uint8Array(mem.buffer, buf, len));
+              crypto.getRandomValues(new Uint8Array(__memory.buffer, buf, len));
             }
             return 0;
           },
@@ -485,51 +484,30 @@ private def generate_output_js_file
             return 0;
           },
           environ_sizes_get(count_ptr, buf_size_ptr) {
-            mem.setUint32(count_ptr, 0, true);
-            mem.setUint32(buf_size_ptr, 0, true);
+            __memory.setUint32(count_ptr, 0, true);
+            __memory.setUint32(buf_size_ptr, 0, true);
             return 0;
           },
           clock_time_get(clock_id, precision, time_ptr) {
             const time = BigInt((clock_id === 0 ? Date.now() : performance.now()) * 1000000);
-            mem.setBigUint64(time_ptr, time, true);
+            __memory.setBigUint64(time_ptr, time, true);
             return 0;
           },
         }
       };
 
-      const { instance, module } =
-        cachedModule ?
-          await WebAssembly.instantiate(cachedModule, imports) :
+      const { instance } =
         isDenoRuntime ?
           await WebAssembly.instantiate(await Deno.readFile(wasmSource), imports) :
         isNodeRuntime ?
           await WebAssembly.instantiate(await nodeFsPromises.readFile(wasmSource), imports) :
           await WebAssembly.instantiateStreaming(fetch(wasmSource), imports);
-      cachedModule = module;
-      const { exports } = instance;
-      exports.memory.grow(1);
-      mem = new DataView(exports.memory.buffer);
-      malloc_atomic = exports.__crystal_malloc_atomic;
-      malloc = exports.__crystal_malloc;
-      string_type_id = exports.__js_bridge_get_type_id(0);
-      exports.__js_bridge_main();
 
-      return {
-    END
-
-    ::JS::EXPORTS.each do |export|
-      js += "
-            #{export[0].stringify}: (...args) => {
-              const slot = __make_ref(args);
-              exports.__export_#{export[1]}(slot);
-              const result = heap[slot];
-              __drop_ref(slot);
-              return result;
-            },"
-    end
-
-    js += <<-END
-      };
+      __exports = instance.exports;
+      __exports.memory.grow(1);
+      __memory = new DataView(__exports.memory.buffer);
+      __string_type_id = __exports.__js_bridge_get_type_id(0);
+      __exports._start();
     }
 
     END
@@ -537,30 +515,66 @@ private def generate_output_js_file
     if target == "esm"
       js += <<-END
 
-    export default instantiateCrystalModule;
+      export default init;
 
-    if (import.meta.main || (isNodeRuntime && import.meta.url === (await import("node:url")).pathToFileURL(process.argv[1]).href)) {
-      await instantiateCrystalModule();
-    }
+      END
 
-    END
+      ::JS::EXPORTS.each do |export|
+        js += <<-END
+
+        export function #{export[0].stringify.id}(...args) {
+          const slot = __make_ref(args);
+          __exports.__export_#{export[1]}(slot);
+          const result = __heap[slot];
+          __drop_ref(slot);
+          return result;
+        }
+
+        END
+      end
+
+      js += <<-END
+
+      if (import.meta.main || (isNodeRuntime && import.meta.url === (await import("node:url")).pathToFileURL(process.argv[1]).href)) {
+        await init();
+      }
+
+      END
     else
       js += <<-END
 
-    if (typeof exports === "object") {
-      module.exports = instantiateCrystalModule;
-    } else {
-      globalThis.instantiateCrystalModule = instantiateCrystalModule;
-    }
+      if (typeof exports === "object") {
+        module.exports = init;
+      } else {
+        globalThis.init = init;
+      }
 
-    if (isNodeRuntime && require.main === module) {
-      instantiateCrystalModule().catch(err => {
-        console.error(err);
-        process.exit(1);
-      });
-    }
+      END
 
-    END
+      ::JS::EXPORTS.each do |export|
+        js += <<-END
+
+        init.#{export[0].stringify.id} = (...args) => {
+          const slot = __make_ref(args);
+          __exports.__export_#{export[1]}(slot);
+          const result = __heap[slot];
+          __drop_ref(slot);
+          return result;
+        };
+
+        END
+      end
+
+      js += <<-END
+
+      if (isNodeRuntime && require.main === module) {
+        init().catch(err => {
+          console.error(err);
+          process.exit(1);
+        });
+      }
+
+      END
     end
 
     system("printf #{js} > #{env("CRYSTAL_JS_OUTPUT") || "index.js"}")
@@ -585,7 +599,7 @@ lib LibC
   fun __main_void : Int32
 end
 
-fun __js_bridge_main
+fun _start
   LibC.__wasm_call_ctors
   argv = {% begin %} {{ env("CRYSTAL_JS_WASM") || "" }}.to_unsafe {% end %}
   status = Crystal.main(1, pointerof(argv))

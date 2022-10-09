@@ -44,7 +44,7 @@ INPUT_FILE=$1
 
 if [ -z "$INPUT_FILE" ]
 then
-  echo "Usage: $0 [--release] [-o OUTPUT_FILE] INPUT_FILE"
+  echo "Usage: $0 INPUT_FILE [--release] [--esm] [--error-trace] [-o OUTPUT_FILE]"
   exit 1
 fi
 
@@ -97,6 +97,6 @@ else
   LINK_ARGS="$LINK_ARGS --strip-all --compress-relocations"
   crystal build "$INPUT_FILE" -o "$WORK_DIR/linked.wasm" $CRYSTAL_OPTS --target wasm32-wasi --link-flags "$LINK_ARGS"
   wasm-opt "$WORK_DIR/linked.wasm" -o $OUTPUT_FILE -Oz --converge --all-features
-  uglifyjs "$CRYSTAL_JS_OUTPUT" --compress --mangle -o "$WORK_DIR/opt.js"
-  mv "$WORK_DIR/opt.js" "$CRYSTAL_JS_OUTPUT"
+  uglifyjs "$CRYSTAL_JS_OUTPUT" --compress --mangle -o "$WORK_DIR/opt.${JS_EXT}"
+  mv "$WORK_DIR/opt.${JS_EXT}" "$CRYSTAL_JS_OUTPUT"
 fi

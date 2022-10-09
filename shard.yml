@@ -8,4 +8,4 @@ authors:
 crystalline:
   main: spec/all.cr
 
-crystal: ">= 1.4.0"
+crystal: ">= 1.5.0"

@@ -549,7 +549,7 @@ private def generate_output_js_file
       if (typeof exports === "object") {
         module.exports = init;
       } else {
-        globalThis.init = init;
+        init().catch(console.error);
       }
 
       END

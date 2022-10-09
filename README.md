@@ -87,7 +87,7 @@ say_hello("World");
 ### Supported Types
 
 | Crystal Type | JavaScript Type | Notes |
-| - | - |
+| - | - | - |
 | `Int` or `Float` | `number` | |
 | `Int64` or `UInt64` | `bigint` | |
 | `Bool` | `boolean` | |

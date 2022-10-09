@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: crystal-lang/install-crystal@v1
         with:
-          crystal_version: 1.5.1
+          crystal: 1.5
       - uses: actions/checkout@v3
       - uses: denoland/setup-deno@v1
       - run: shards install

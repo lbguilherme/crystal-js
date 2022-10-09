@@ -114,6 +114,9 @@ module JS
                       info[:fun_args_decl] << [arg, UInt8]
                       info[:js_body] += "(#{arg} === 1)"
                       info[:cr_args] << "((#{info[:value].id}) ? 1 : 0)".id
+                    elsif info[:type] == ::Nil
+                      arg = "arg#{var_counter += 1}".id
+                      info[:js_body] += "null"
                     elsif info[:type] == ::String
                       arg_buf = "arg#{var_counter += 1}".id
                       arg_len = "arg#{var_counter += 1}".id
@@ -316,7 +319,7 @@ module JS
       {% end %}
 
       @[JS::Method]
-      def self.__export_{{export_index}}_set_result(slot : Int32, result : {{method_def.return_type}})
+      def self.__export_{{export_index}}_set_result(slot : Int32, result : {{method_def.return_type || Nil}})
         <<-js
           __heap[#{slot}] = #{result};
         js

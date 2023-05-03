@@ -74,7 +74,7 @@ fi
 if [ ! -f "$SCRIPT_DIR"/wasm32-wasi-libs/libc.a ]
 then
   mkdir -p "$SCRIPT_DIR"/wasm32-wasi-libs
-  curl -L https://github.com/lbguilherme/wasm-libs/releases/download/0.0.2/wasm32-wasi-libs.tar.gz | tar -C "$SCRIPT_DIR"/wasm32-wasi-libs -xz
+  curl -L https://github.com/lbguilherme/wasm-libs/releases/download/0.0.3/wasm32-wasi-libs.tar.gz | tar -C "$SCRIPT_DIR"/wasm32-wasi-libs -xz
 fi
 
 export CRYSTAL_JS_WASM="$OUTPUT_FILE"

@@ -455,6 +455,9 @@ private def generate_output_js_file
           },
           fd_write(fd, iovs, length, bytes_written_ptr) {
             if (fd < 1 || fd > 2) return 8; // WASI_EBADF
+            if (__memory.buffer.byteLength == 0) {
+              __memory = new DataView(__exports.memory.buffer);
+            }
             let bytes_written = 0;
             for (let i = 0; i < length; i++) {
               const buf = __memory.getUint32(iovs + i * 8, true);
@@ -476,6 +479,9 @@ private def generate_output_js_file
             throw new Error("proc_exit " + exitcode);
           },
           random_get(buf, len) {
+            if (__memory.buffer.byteLength < len) {
+              __memory = new DataView(__exports.memory.buffer);
+            }
             if (isNodeRuntime) {
               nodeCrypto.randomBytes(len).copy(new Uint8Array(__memory.buffer, buf, len));
             } else {
@@ -487,6 +493,9 @@ private def generate_output_js_file
             return 0;
           },
           environ_sizes_get(count_ptr, buf_size_ptr) {
+            if (__memory.buffer.byteLength == 0) {
+              __memory = new DataView(__exports.memory.buffer);
+            }
             __memory.setUint32(count_ptr, 0, true);
             __memory.setUint32(buf_size_ptr, 0, true);
             return 0;
